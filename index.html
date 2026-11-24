@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <script>
+    try {
+      const savedScheme = localStorage.getItem("color-scheme");
+      if (savedScheme === "light" || savedScheme === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = savedScheme;
+      }
+      const savedTheme = localStorage.getItem("accent-preset");
+      if (savedTheme) {
+        document.documentElement.dataset.theme = savedTheme;
+      }
+      if (localStorage.getItem("blueprint-grid") === "off") {
+        document.documentElement.dataset.grid = "off";
+      }
+    } catch {}
+  </script>
+  <title>Ayush Gupta — Senior Software Engineer &amp; 1:1 Architecture Sessions</title>
+  <meta name="description" content="Ayush Gupta — Senior Software Engineer at Dell Technologies (Observability, Anomaly Detection &amp; Cloud Resiliency). Explore experience and book a 1-hour 1:1 paid session (₹500 INR).">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230b57d0'/%3E%3Cpath d='M16 44L26 20h4l10 24h-4.5l-2.2-5.6H22.7L20.5 44H16zm8-9.5h8L28 24.5 24 34.5zM41 32c0-7.2 4.8-12 11.4-12 4.2 0 7.2 1.8 8.9 4.8l-3.6 2.2c-1-1.9-2.7-3-5.2-3-4.1 0-6.9 3.1-6.9 8s2.7 8 6.9 8c3.1 0 5.1-1.5 5.6-4.2h-5.6v-3.7h9.9v2.4c0 6.1-4 9.6-9.9 9.6C45.8 44 41 39.2 41 32z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-tabs">Skip to main content</a>
+
+  <div class="bg-blueprint" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span>AG</span>
+          <span class="pulse-dot"></span>
+        </div>
+        <div class="brand-text">
+          <p class="brand-name">Ayush Gupta</p>
+          <p class="brand-role">Senior Software Engineer · Distributed Systems</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button type="button" class="btn btn-ghost btn-compact" id="cmd-open-btn" aria-label="Open quick navigation palette">
+          <span aria-hidden="true">⌘K</span>
+          <span class="hide-sm">Quick Jump</span>
+        </button>
+
+        <button type="button" class="btn btn-ghost btn-icon-label" id="theme-quick-toggle" aria-label="Toggle color scheme">
+          <span class="scheme-icon scheme-icon-light" aria-hidden="true">☀</span>
+          <span class="scheme-icon scheme-icon-dark" aria-hidden="true">☾</span>
+          <span class="scheme-text scheme-text-to-dark">Dark</span>
+          <span class="scheme-text scheme-text-to-light">Light</span>
+        </button>
+
+        <button type="button" class="btn btn-ghost" id="studio-btn" popovertarget="theme-studio" aria-haspopup="dialog">
+          <span aria-hidden="true">◐</span>
+          <span>Theme Studio</span>
+        </button>
+
+        <button type="button" class="btn btn-primary" data-jump-tab="tab-schedule">
+          <span>Book 1:1 · ₹500</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Theme Studio Popover -->
+  <dialog id="theme-studio" popover="auto" class="theme-studio-popover" aria-labelledby="studio-title">
+    <div class="studio-header">
+      <h2 id="studio-title">Theme &amp; Craft Studio</h2>
+      <button type="button" class="btn btn-ghost btn-icon" popovertarget="theme-studio" popovertargetaction="hide" aria-label="Close theme studio">✕</button>
+    </div>
+
+    <div class="studio-section">
+      <p class="studio-label">Color Mode</p>
+      <div class="segmented" role="group" aria-label="Color mode preference">
+        <button type="button" class="seg-btn" data-scheme-choice="system" aria-pressed="true">
+          System <span class="muted" id="system-scheme-hint"></span>
+        </button>
+        <button type="button" class="seg-btn" data-scheme-choice="light" aria-pressed="false">Light</button>
+        <button type="button" class="seg-btn" data-scheme-choice="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+
+    <div class="studio-section">
+      <p class="studio-label">Creative Palette</p>
+      <div class="preset-grid" role="group" aria-label="Accent color theme">
+        <button type="button" class="preset-card" data-preset="telemetry" aria-pressed="true">
+          <span class="swatch swatch-telemetry" aria-hidden="true"></span>
+          <span>Telemetry Cyan</span>
+        </button>
+        <button type="button" class="preset-card" data-preset="gopher" aria-pressed="false">
+          <span class="swatch swatch-gopher" aria-hidden="true"></span>
+          <span>Gopher Emerald</span>
+        </button>
+        <button type="button" class="preset-card" data-preset="solar" aria-pressed="false">
+          <span class="swatch swatch-solar" aria-hidden="true"></span>
+          <span>Solar Amber</span>
+        </button>
+        <button type="button" class="preset-card" data-preset="blueprint" aria-pressed="false">
+          <span class="swatch swatch-blueprint" aria-hidden="true"></span>
+          <span>Blueprint Indigo</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="studio-section studio-row">
+      <label class="toggle-label" for="grid-toggle">Blueprint Grid Canvas</label>
+      <input type="checkbox" id="grid-toggle" checked>
+    </div>
+  </dialog>
+
+  <main id="main-tabs" class="page-shell">
+    <!-- Hero Summary Strip -->
+    <section class="hero-banner" aria-label="Profile introduction">
+      <div class="hero-copy">
+        <div class="status-pill">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>Senior Software Engineer @ Dell Technologies · Open for 1:1 Sessions</span>
+        </div>
+        <h1>Architecting resilient microservices, observability pipelines &amp; global SaaS platforms.</h1>
+        <p class="hero-lead">
+          10+ years across <strong>Dell Technologies</strong> and <strong>Appointy</strong>—leading monolith-to-microservices migrations,
+          OpenTelemetry &amp; Grafana observability, PPDM anomaly detection, and Google-partnered scheduling systems in <strong>Go</strong>, <strong>Java</strong>, and <strong>AWS</strong>.
+        </p>
+
+        <div class="hero-cta-row">
+          <button type="button" class="btn btn-primary btn-lg" data-jump-tab="tab-schedule">
+            Schedule 1-Hour Session · ₹500 INR
+          </button>
+          <a class="btn btn-outline btn-lg" href="https://www.linkedin.com/in/ayush-g-8b5b7ab8/" target="_blank" rel="noopener noreferrer">
+            LinkedIn Profile ↗
+          </a>
+          <a class="btn btn-ghost btn-lg" href="https://github.com/ayushbpl10" target="_blank" rel="noopener noreferrer">
+            GitHub ↗
+          </a>
+        </div>
+
+        <dl class="hero-metrics">
+          <div class="metric-item">
+            <dt>Production Engineering</dt>
+            <dd>10+ Years</dd>
+          </div>
+          <div class="metric-item">
+            <dt>Dell Technologies</dt>
+            <dd>5+ Years</dd>
+          </div>
+          <div class="metric-item">
+            <dt>LinkedIn Network</dt>
+            <dd>4,414 Followers</dd>
+          </div>
+          <div class="metric-item">
+            <dt>1:1 Deep-Dive</dt>
+            <dd>₹500 / 60 min</dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Interactive Distributed Trace Card -->
+      <aside class="trace-card" aria-label="Interactive career trace simulator">
+        <div class="trace-header">
+          <div>
+            <p class="trace-eyebrow">Interactive System Trace</p>
+            <h2 class="trace-title">career://ayush-gupta/architecture</h2>
+          </div>
+          <span class="trace-badge">200 OK · 199ms</span>
+        </div>
+        <p class="trace-hint">Select any span to inspect production engineering work:</p>
+        <div class="trace-spans" id="trace-spans" role="group" aria-label="Career architecture spans"></div>
+        <div class="trace-inspector" id="trace-inspector" aria-live="polite"></div>
+      </aside>
+    </section>
+
+    <!-- Main Tabbed Interface -->
+    <section class="tabs-section" aria-label="Profile and session booking sections">
+      <div class="tablist-wrap">
+        <div class="tablist scroller" id="profile-tablist" focusgroup="tablist nomemory" role="tablist" aria-label="Profile sections">
+          <button type="button" role="tab" id="tab-overview" aria-selected="true" focusgroupstart data-hash="overview">
+            <span class="tab-icon" aria-hidden="true">◈</span>
+            <span>About &amp; Expertise</span>
+          </button>
+          <button type="button" role="tab" id="tab-experience" aria-selected="false" data-hash="experience">
+            <span class="tab-icon" aria-hidden="true">⎇</span>
+            <span>Experience &amp; Architecture</span>
+          </button>
+          <button type="button" role="tab" id="tab-schedule" aria-selected="false" data-hash="schedule">
+            <span class="tab-icon" aria-hidden="true">◷</span>
+            <span>Schedule a Session</span>
+            <span class="tab-badge">₹500 / 1h</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="panels-stage">
+        <!-- TAB 1: ABOUT & EXPERTISE -->
+        <section role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" tabindex="0">
+          <div class="panel-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">01 · About Me</p>
+                <h2>Engineering Pillars &amp; Impact</h2>
+              </div>
+              <p class="section-sub">Based in India · Delivering enterprise resiliency &amp; high-scale APIs</p>
+            </div>
+
+            <div class="pillars-grid" id="pillars-grid"></div>
+
+            <div class="skills-header">
+              <div>
+                <p class="eyebrow">02 · Technical Stack</p>
+                <h2>Core Capabilities</h2>
+              </div>
+              <div class="filter-pills" role="group" aria-label="Filter skills by domain">
+                <button type="button" class="filter-chip" data-skill-filter="all" aria-pressed="true">All</button>
+                <button type="button" class="filter-chip" data-skill-filter="backend" aria-pressed="false">Distributed &amp; Backend</button>
+                <button type="button" class="filter-chip" data-skill-filter="observability" aria-pressed="false">Observability &amp; Cloud</button>
+                <button type="button" class="filter-chip" data-skill-filter="frontend" aria-pressed="false">Frontend &amp; Integrations</button>
+              </div>
+            </div>
+
+            <ul class="skills-grid" id="skills-grid"></ul>
+
+            <div class="cta-strip">
+              <div>
+                <h3>Want to discuss distributed systems, OpenTelemetry, or your engineering career?</h3>
+                <p>Book a focused 60-minute 1:1 session for ₹500 INR — architecture review, mock system design, or career strategy.</p>
+              </div>
+              <button type="button" class="btn btn-primary btn-lg" data-jump-tab="tab-schedule">
+                Go to Schedule a Session →
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 2: EXPERIENCE & ARCHITECTURE -->
+        <section role="tabpanel" id="panel-experience" aria-labelledby="tab-experience" hidden="until-found">
+          <div class="panel-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">03 · Career Timeline</p>
+                <h2>10+ Years of Production Systems</h2>
+              </div>
+              <div class="exp-controls">
+                <button type="button" class="btn btn-ghost btn-compact" id="expand-all-exp">Expand all details</button>
+                <button type="button" class="btn btn-ghost btn-compact" id="collapse-all-exp">Collapse all</button>
+              </div>
+            </div>
+
+            <div class="timeline" id="experience-timeline"></div>
+          </div>
+        </section>
+
+        <!-- TAB 3: SCHEDULE A SESSION (PAID 1 HR / 500 INR) -->
+        <section role="tabpanel" id="panel-schedule" aria-labelledby="tab-schedule" hidden="until-found">
+          <div class="panel-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">04 · 1:1 Paid Mentorship &amp; Consulting</p>
+                <h2>Schedule a 1-Hour Session — ₹500 INR</h2>
+              </div>
+              <div class="session-price-pill">
+                <span class="price-main">₹500</span>
+                <span class="price-meta">INR · 60 mins · Live 1:1</span>
+              </div>
+            </div>
+
+            <div id="setup-notice" class="setup-banner" hidden>
+              <strong>Preview Mode:</strong> Configure your real <code>upiId</code> (and optional <code>razorpayPaymentLink</code> / <code>contactEmail</code>) in <code>config.js</code> to receive ₹500 INR payments directly. Visitors can still test the complete slot selection, QR generation, and calendar invite flow right now.
+            </div>
+
+            <div class="booking-layout">
+              <form id="booking-form" class="booking-form" aria-labelledby="booking-form-heading" novalidate>
+                <h3 id="booking-form-heading" class="visually-hidden">1-Hour Paid Session Booking Form</h3>
+
+                <!-- Step 1: Topic -->
+                <fieldset class="form-fieldset">
+                  <legend>1. Choose Session Focus Area <span aria-hidden="true">*</span></legend>
+                  <div class="topic-grid" id="topic-options"></div>
+                </fieldset>
+
+                <!-- Step 2: Date & Slot -->
+                <fieldset class="form-fieldset">
+                  <legend>2. Pick Date &amp; 1-Hour Slot (<span id="tz-badge">IST</span>) <span aria-hidden="true">*</span></legend>
+                  <p class="field-hint">Showing upcoming 14 days in Asia/Kolkata (IST) with live conversion to your local timezone.</p>
+                  <div class="date-strip" id="date-strip" role="group" aria-label="Quick date selection"></div>
+
+                  <div class="date-slot-row">
+                    <div class="field">
+                      <label for="session-date">Selected Date <span aria-hidden="true">*</span></label>
+                      <span id="date-hint" class="hint">Format: YYYY-MM-DD</span>
+                      <input type="date" id="session-date" name="sessionDate" required aria-describedby="date-hint" data-error="date-error">
+                      <div id="date-error" class="error-msg">
+                        <span role="img" aria-label="Error">⚠</span> Please choose a date from today onward.
+                      </div>
+                    </div>
+
+                    <div class="field">
+                      <span class="field-label">Your Local Timezone</span>
+                      <span id="local-tz-display" class="tz-readout">Detecting…</span>
+                    </div>
+                  </div>
+
+                  <div class="slots-wrap">
+                    <p class="sub-legend" id="slots-label">Available 1-Hour Slots <span aria-hidden="true">*</span></p>
+                    <div class="slots-grid" id="slots-grid" role="radiogroup" aria-labelledby="slots-label"></div>
+                    <div id="slot-error" class="error-msg" hidden>
+                      <span role="img" aria-label="Error">⚠</span> Please select an available 1-hour time slot.
+                    </div>
+                  </div>
+                </fieldset>
+
+                <!-- Step 3: Attendee Details -->
+                <fieldset class="form-fieldset">
+                  <legend>3. Your Details &amp; Agenda</legend>
+
+                  <div class="field-row-2">
+                    <div class="field">
+                      <label for="guest-name">Full Name <span aria-hidden="true">*</span></label>
+                      <span id="name-hint" class="hint">Used on your calendar invite and booking pass.</span>
+                      <input type="text" id="guest-name" name="guestName" required minlength="2" maxlength="100" autocomplete="name" enterkeyhint="next" aria-describedby="name-hint" data-error="name-error">
+                      <div id="name-error" class="error-msg">
+                        <span role="img" aria-label="Error">⚠</span> Please enter your full name (at least 2 characters).
+                      </div>
+                    </div>
+
+                    <div class="field">
+                      <label for="guest-email">Email Address <span aria-hidden="true">*</span></label>
+                      <span id="email-hint" class="hint">Format: you@example.com</span>
+                      <input type="email" id="guest-email" name="guestEmail" required autocomplete="email" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="next" aria-describedby="email-hint" data-error="email-error">
+                      <div id="email-error" class="error-msg">
+                        <span role="img" aria-label="Error">⚠</span> Enter a valid email address in the format you@example.com.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label for="guest-profile">LinkedIn or GitHub URL (optional)</label>
+                    <span id="profile-hint" class="hint">Helps me tailor the session to your background.</span>
+                    <input type="url" id="guest-profile" name="guestProfile" autocomplete="url" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="https://www.linkedin.com/in/..." enterkeyhint="next" aria-describedby="profile-hint" data-error="profile-error">
+                    <div id="profile-error" class="error-msg">
+                      <span role="img" aria-label="Error">⚠</span> Enter a full URL starting with https:// or http://.
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label for="guest-agenda">What would you like to cover in this 1 hour? <span aria-hidden="true">*</span></label>
+                    <span id="agenda-hint" class="hint">Share architecture questions, target roles, or tech stack (minimum 10 characters).</span>
+                    <textarea id="guest-agenda" name="guestAgenda" rows="3" required minlength="10" maxlength="800" enterkeyhint="done" aria-describedby="agenda-hint" data-error="agenda-error"></textarea>
+                    <div id="agenda-error" class="error-msg">
+                      <span role="img" aria-label="Error">⚠</span> Please describe your session agenda (at least 10 characters).
+                    </div>
+                  </div>
+                </fieldset>
+
+                <!-- Step 4: Payment & Reference -->
+                <fieldset class="form-fieldset">
+                  <legend>4. Complete ₹500 INR Payment &amp; Confirm</legend>
+                  <p class="field-hint">
+                    Scan the UPI QR code or tap the UPI app link on the summary card to pay <strong>₹500 INR</strong>, then enter your 12-digit UPI Reference / UTR number (or request a confirmation slot) below.
+                  </p>
+
+                  <div class="field">
+                    <label for="upi-utr">UPI Transaction ID / UTR Number (12 digits, optional in preview)</label>
+                    <span id="utr-hint" class="hint">Found in GPay / PhonePe / Paytm payment receipt (e.g. 412345678901).</span>
+                    <input type="text" id="upi-utr" name="upiUtr" inputmode="numeric" pattern="[A-Za-z0-9]{6,24}" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="done" aria-describedby="utr-hint" data-error="utr-error">
+                    <div id="utr-error" class="error-msg">
+                      <span role="img" aria-label="Error">⚠</span> Reference ID should be 6–24 letters or digits without spaces.
+                    </div>
+                  </div>
+
+                  <div class="submit-row">
+                    <button type="submit" id="confirm-booking-btn" class="btn btn-primary btn-lg btn-block">
+                      Pay ₹500 INR &amp; Confirm 1-Hour Session
+                    </button>
+                  </div>
+                </fieldset>
+              </form>
+
+              <!-- Live Booking Summary & UPI QR Card -->
+              <aside class="checkout-card" aria-label="Session checkout and UPI payment">
+                <div class="checkout-head">
+                  <span class="eyebrow">Live Checkout</span>
+                  <h3>1:1 Session Pass</h3>
+                </div>
+
+                <dl class="summary-list">
+                  <div>
+                    <dt>Host</dt>
+                    <dd>Ayush Gupta (Senior SWE, Dell)</dd>
+                  </div>
+                  <div>
+                    <dt>Duration</dt>
+                    <dd>60 Minutes (1 Hour)</dd>
+                  </div>
+                  <div>
+                    <dt>Topic</dt>
+                    <dd id="summary-topic">Microservices &amp; System Design</dd>
+                  </div>
+                  <div>
+                    <dt>Date &amp; Time</dt>
+                    <dd id="summary-datetime">Select a date &amp; slot</dd>
+                  </div>
+                  <div class="summary-total">
+                    <dt>Total Fee</dt>
+                    <dd>₹500 INR</dd>
+                  </div>
+                </dl>
+
+                <div class="upi-box">
+                  <div class="qr-frame" id="upi-qr-container"></div>
+                  <p class="upi-caption" id="upi-caption">Scan with GPay, PhonePe, Paytm, or BHIM</p>
+
+                  <div class="upi-id-row">
+                    <code id="upi-id-value">Configure in config.js</code>
+                    <span class="copy">
+                      <button type="button" class="copy-button" command="--copy" commandfor="upi-id-value" aria-label="Copy UPI ID">
+                        <span class="copy-icon" aria-hidden="true">⧉</span>
+                        <span class="check-icon" aria-hidden="true">✓</span>
+                      </button>
+                      <span class="tip" role="status"></span>
+                    </span>
+                  </div>
+
+                  <div class="upi-actions">
+                    <a id="upi-deep-link" class="btn btn-outline btn-block" href="#">
+                      Open UPI App · Pay ₹500
+                    </a>
+                    <a id="razorpay-link" class="btn btn-ghost btn-block" href="#" target="_blank" rel="noopener noreferrer" hidden>
+                      Pay via Card / NetBanking ↗
+                    </a>
+                  </div>
+                </div>
+
+                <div class="saved-bookings" id="saved-bookings-box" hidden>
+                  <h4>Your Recent Bookings</h4>
+                  <ul id="saved-bookings-list"></ul>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p>Built by <strong>Ayush Gupta</strong> · Hosted on GitHub Pages · Zero trackers, accessible by design.</p>
+      <div class="footer-links">
+        <a href="https://www.linkedin.com/in/ayush-g-8b5b7ab8/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+        <a href="https://github.com/ayushbpl10" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <button type="button" class="link-btn" data-jump-tab="tab-schedule">Book 1:1 (₹500)</button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Booking Confirmation Modal Dialog -->
+  <dialog id="booking-dialog" closedby="any" aria-labelledby="booking-dialog-title">
+    <div class="dialog-shell">
+      <div class="dialog-header">
+        <span class="dialog-badge">Session Pass Generated</span>
+        <button type="button" class="btn btn-ghost btn-icon" command="close" commandfor="booking-dialog" aria-label="Close booking confirmation">✕</button>
+      </div>
+      <h1 id="booking-dialog-title" class="dialog-title">Your 1-Hour Session is Reserved</h1>
+      <p class="dialog-sub" id="dialog-subtitle"></p>
+
+      <div class="pass-card" id="dialog-pass-summary"></div>
+
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-primary" id="download-ics-btn" autofocus>
+          Download Calendar Invite (.ics)
+        </button>
+        <a class="btn btn-outline" id="gcal-link-btn" href="#" target="_blank" rel="noopener noreferrer">
+          Add to Google Calendar ↗
+        </a>
+        <span class="copy">
+          <button type="button" class="btn btn-ghost copy-button-text" command="--copy" commandfor="dialog-pass-summary" aria-label="Copy booking summary">
+            Copy Summary
+          </button>
+          <span class="tip" role="status"></span>
+        </span>
+        <a class="btn btn-ghost" id="send-confirm-btn" href="#" target="_blank" rel="noopener noreferrer">
+          Send Confirmation on LinkedIn / Email ↗
+        </a>
+      </div>
+
+      <form method="dialog" class="dialog-footer-form">
+        <button value="done" class="btn btn-ghost">Close</button>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Quick Command Palette Dialog (Ctrl+K / Cmd+K) -->
+  <dialog id="command-dialog" closedby="any" aria-labelledby="command-dialog-title">
+    <div class="dialog-shell command-shell">
+      <div class="dialog-header">
+        <h1 id="command-dialog-title" class="dialog-title">Quick Navigation</h1>
+        <button type="button" class="btn btn-ghost btn-icon" command="close" commandfor="command-dialog" aria-label="Close quick navigation">✕</button>
+      </div>
+      <div class="command-list" role="list">
+        <button type="button" class="command-item" data-cmd-action="tab:tab-overview" autofocus>
+          <span>◈ Go to About &amp; Expertise</span>
+          <kbd>1</kbd>
+        </button>
+        <button type="button" class="command-item" data-cmd-action="tab:tab-experience">
+          <span>⎇ Go to Experience &amp; Architecture</span>
+          <kbd>2</kbd>
+        </button>
+        <button type="button" class="command-item" data-cmd-action="tab:tab-schedule">
+          <span>◷ Go to Schedule a Session (₹500 / 1h)</span>
+          <kbd>3</kbd>
+        </button>
+        <button type="button" class="command-item" data-cmd-action="theme:toggle">
+          <span>◐ Toggle Light / Dark Theme</span>
+          <kbd>T</kbd>
+        </button>
+        <a class="command-item" href="https://www.linkedin.com/in/ayush-g-8b5b7ab8/" target="_blank" rel="noopener noreferrer">
+          <span>↗ Open LinkedIn Profile</span>
+          <kbd>L</kbd>
+        </a>
+        <a class="command-item" href="https://github.com/ayushbpl10" target="_blank" rel="noopener noreferrer">
+          <span>↗ Open GitHub (@ayushbpl10)</span>
+          <kbd>G</kbd>
+        </a>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Accessible Toast Region -->
+  <div role="region" aria-label="Notifications" class="toast-region">
+    <div id="status-toast" popover="manual" class="toast-card">
+      <span id="toast-message"></span>
+      <button type="button" class="btn btn-ghost btn-icon" popovertarget="status-toast" popovertargetaction="hide" aria-label="Dismiss notification">✕</button>
+    </div>
+  </div>
+
+  <!-- Fallback live announcer for ariaNotify & form validation -->
+  <div id="polite-announcer" aria-live="polite" class="visually-hidden"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
