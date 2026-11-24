@@ -23,6 +23,10 @@ export const SITE_CONFIG = {
   // Personal Razorpay Payment Handle / Payment Link (no backend or secrets required for static sites)
   razorpayPaymentLink: "https://razorpay.me/@ayushgupta3781",
 
+  // Optional: HTTPS backend URL running server/server.js (e.g. "https://api.yourdomain.com")
+  // Enables the in-page Razorpay Standard Checkout modal (/api/create-order + /api/verify-payment).
+  razorpayApiBaseUrl: "",
+
   // Optional: Personal email for pre-filled booking confirmation emails (never exposes work email).
   contactEmail: "",
 

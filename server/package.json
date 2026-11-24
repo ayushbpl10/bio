@@ -1,0 +1,15 @@
+{
+  "name": "bio-razorpay-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zero-cost Razorpay Standard Checkout order creation & HMAC signature verification server for Ayush Gupta's 1:1 session booking.",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "razorpay": "^2.9.6"
+  }
+}

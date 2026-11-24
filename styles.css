@@ -1810,6 +1810,29 @@ textarea {
   margin-block-start: 0.2rem;
 }
 
+.payment-error {
+  margin-block: 0.5rem 0.75rem;
+  padding: 0.75rem 0.95rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--error);
+  background-color: var(--error-bg);
+  color: var(--error);
+  font-size: 0.86rem;
+  font-weight: 600;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.payment-error[hidden] {
+  display: none;
+}
+
+.pill-btn[aria-busy="true"] {
+  opacity: 0.75;
+  cursor: wait;
+}
+
 :is(input, textarea):is(:user-invalid, .user-invalid-fallback) + .error-msg {
   display: block;
 }

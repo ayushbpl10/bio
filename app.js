@@ -567,6 +567,9 @@ const upiIdValueEl = document.getElementById("upi-id-value");
 const upiCaptionEl = document.getElementById("upi-caption");
 const upiDeepLinkEl = document.getElementById("upi-deep-link");
 const razorpayLinkEl = document.getElementById("razorpay-link");
+const razorpayCheckoutBtn = document.getElementById("razorpay-checkout-btn");
+const razorpayErrorEl = document.getElementById("razorpay-error");
+const razorpayErrorTextEl = document.getElementById("razorpay-error-text");
 const setupNoticeEl = document.getElementById("setup-notice");
 const savedBookingsBox = document.getElementById("saved-bookings-box");
 const savedBookingsList = document.getElementById("saved-bookings-list");
@@ -574,17 +577,22 @@ const savedBookingsList = document.getElementById("saved-bookings-list");
 const visitorTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata";
 localTzEl.textContent = visitorTz;
 
+const razorpayApiBase = (SITE_CONFIG.razorpayApiBaseUrl || "").trim().replace(/\/+$/, "");
 const isLiveUpiConfigured = Boolean(SITE_CONFIG.upiId && SITE_CONFIG.upiId.trim());
 const isLiveRazorpayConfigured = Boolean(
   SITE_CONFIG.razorpayPaymentLink && SITE_CONFIG.razorpayPaymentLink.trim()
 );
 
-if (!isLiveUpiConfigured && !isLiveRazorpayConfigured) {
+if (!isLiveUpiConfigured && !isLiveRazorpayConfigured && !razorpayApiBase) {
   setupNoticeEl.hidden = false;
   upiIdValueEl.textContent = "Set upiId in config.js";
   upiCaptionEl.textContent = "Preview UPI QR (₹500 INR) — update config.js to go live";
 } else {
   upiIdValueEl.textContent = isLiveUpiConfigured ? SITE_CONFIG.upiId.trim() : "Via Razorpay below";
+}
+
+if (razorpayApiBase && razorpayCheckoutBtn) {
+  razorpayCheckoutBtn.hidden = false;
 }
 
 if (isLiveRazorpayConfigured) {
@@ -1087,17 +1095,18 @@ downloadIcsBtn.addEventListener("click", () => {
   if (activeBooking) downloadIcs(activeBooking);
 });
 
-bookingForm.addEventListener("submit", (e) => {
-  e.preventDefault();
+function validateBookingInputs() {
   const slot = getSelectedSlot();
   slotErrorEl.hidden = Boolean(slot);
-
   if (!bookingForm.checkValidity() || !slot) {
     const firstInvalid = bookingForm.querySelector(":invalid");
     firstInvalid?.focus();
-    return;
+    return null;
   }
+  return slot;
+}
 
+function buildBookingFromForm(slot, paymentOverride = "") {
   const topic = getSelectedTopic();
   const dateStr = dateInput.value;
   const info = getIstWeekday(dateStr);
@@ -1107,13 +1116,13 @@ bookingForm.addEventListener("submit", (e) => {
   const end = new Date(start.getTime() + SITE_CONFIG.sessionDurationMins * 60000);
   const code = Math.random().toString(36).slice(2, 6).toUpperCase();
 
-  const booking = {
+  return {
     id: `AG-${dateStr.slice(2, 4)}${dateStr.slice(5, 7)}-${code}`,
     name: document.getElementById("guest-name").value.trim(),
     email: document.getElementById("guest-email").value.trim(),
     profile: document.getElementById("guest-profile").value.trim(),
     agenda: document.getElementById("guest-agenda").value.trim(),
-    utr: document.getElementById("upi-utr").value.trim(),
+    utr: paymentOverride || document.getElementById("upi-utr").value.trim(),
     topicId: topic.id,
     topicTitle: topic.title,
     dateStr,
@@ -1122,7 +1131,150 @@ bookingForm.addEventListener("submit", (e) => {
     startIso: start.toISOString(),
     endIso: end.toISOString(),
   };
+}
 
+function showRazorpayError(message) {
+  if (!razorpayErrorEl || !razorpayErrorTextEl) return;
+  if (!message) {
+    razorpayErrorEl.hidden = true;
+    razorpayErrorTextEl.textContent = "";
+    return;
+  }
+  razorpayErrorTextEl.textContent = message;
+  razorpayErrorEl.hidden = false;
+  razorpayErrorEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function setCheckoutBusy(busy, label = "Pay ₹500 via Razorpay Checkout") {
+  if (!razorpayCheckoutBtn) return;
+  razorpayCheckoutBtn.setAttribute("aria-busy", String(busy));
+  razorpayCheckoutBtn.textContent = label;
+}
+
+function ensureRazorpaySdk() {
+  if (typeof window.Razorpay === "function") return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => (typeof window.Razorpay === "function" ? resolve() : reject(new Error("Razorpay SDK unavailable.")));
+    script.onerror = () => reject(new Error("Could not load Razorpay Checkout script."));
+    document.head.append(script);
+  });
+}
+
+async function startRazorpayCheckout() {
+  if (!razorpayApiBase) return;
+  if (razorpayCheckoutBtn?.getAttribute("aria-busy") === "true") return;
+
+  showRazorpayError("");
+  const slot = validateBookingInputs();
+  if (!slot) return;
+
+  const topic = getSelectedTopic();
+  const dateStr = dateInput.value;
+  const guestName = document.getElementById("guest-name").value.trim();
+  const guestEmail = document.getElementById("guest-email").value.trim();
+
+  setCheckoutBusy(true, "Creating Razorpay order…");
+  try {
+    await ensureRazorpaySdk();
+    const orderRes = await fetch(`${razorpayApiBase}/api/create-order`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: SITE_CONFIG.sessionFeeInr * 100,
+        currency: SITE_CONFIG.sessionCurrency,
+        receipt: `ag_${dateStr}_${slot.id}`.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40),
+        topic: topic.id,
+        slot: `${dateStr} ${slot.label}`,
+      }),
+    });
+    const orderData = await orderRes.json().catch(() => ({}));
+    if (!orderRes.ok || !orderData.order_id || !orderData.key_id) {
+      throw new Error(orderData.error || `Order creation failed (HTTP ${orderRes.status}).`);
+    }
+
+    const rzp = new window.Razorpay({
+      key: orderData.key_id,
+      amount: orderData.amount,
+      currency: orderData.currency,
+      name: SITE_CONFIG.ownerName,
+      description: `1:1 Session — ${topic.title}`,
+      order_id: orderData.order_id,
+      prefill: {
+        name: guestName,
+        email: guestEmail,
+      },
+      notes: {
+        topic: topic.title,
+        slot: `${dateStr} ${slot.label}`,
+      },
+      theme: {
+        color: "#005ec4",
+      },
+      modal: {
+        ondismiss: () => {
+          setCheckoutBusy(false);
+          showRazorpayError("Payment cancelled before completion. You can retry or pay via UPI QR.");
+        },
+      },
+      handler: async (paymentResp) => {
+        setCheckoutBusy(true, "Verifying payment signature…");
+        try {
+          const verifyRes = await fetch(`${razorpayApiBase}/api/verify-payment`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              razorpay_order_id: paymentResp.razorpay_order_id,
+              razorpay_payment_id: paymentResp.razorpay_payment_id,
+              razorpay_signature: paymentResp.razorpay_signature,
+            }),
+          });
+          const verifyData = await verifyRes.json().catch(() => ({}));
+          if (!verifyRes.ok || !verifyData.verified) {
+            throw new Error(verifyData.error || "Payment verification failed.");
+          }
+
+          const verifiedRef = `${paymentResp.razorpay_payment_id} (Razorpay Verified)`;
+          const utrInput = document.getElementById("upi-utr");
+          if (utrInput) utrInput.value = paymentResp.razorpay_payment_id;
+          const booking = buildBookingFromForm(slot, verifiedRef);
+          saveBooking(booking);
+          openBookingDialog(booking);
+          showRazorpayError("");
+        } catch (verifyErr) {
+          showRazorpayError(
+            verifyErr.message || "Signature verification failed. Please save your payment ID and contact Ayush."
+          );
+        } finally {
+          setCheckoutBusy(false);
+        }
+      },
+    });
+
+    rzp.on("payment.failed", (failedEvent) => {
+      setCheckoutBusy(false);
+      const reason = failedEvent?.error?.description || failedEvent?.error?.reason || "Payment failed.";
+      showRazorpayError(`Razorpay payment failed: ${reason}`);
+    });
+
+    setCheckoutBusy(false);
+    rzp.open();
+  } catch (err) {
+    setCheckoutBusy(false);
+    showRazorpayError(err.message || "Unable to open Razorpay Checkout.");
+  }
+}
+
+razorpayCheckoutBtn?.addEventListener("click", startRazorpayCheckout);
+
+bookingForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  showRazorpayError("");
+  const slot = validateBookingInputs();
+  if (!slot) return;
+
+  const booking = buildBookingFromForm(slot);
   saveBooking(booking);
   openBookingDialog(booking);
 });

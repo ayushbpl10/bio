@@ -413,6 +413,11 @@
                     </div>
                   </div>
 
+                  <div id="razorpay-error" class="payment-error" role="alert" hidden>
+                    <span role="img" aria-label="Error">⚠</span>
+                    <span id="razorpay-error-text"></span>
+                  </div>
+
                   <div class="submit-row">
                     <button type="submit" id="confirm-booking-btn" class="cta-primary cta-block">
                       <span>Lock In 1-Hour Session · ₹500 INR</span>
@@ -467,6 +472,9 @@
                   </div>
 
                   <div class="upi-actions">
+                    <button type="button" id="razorpay-checkout-btn" class="pill-btn pill-primary btn-block" hidden>
+                      Pay ₹500 via Razorpay Checkout
+                    </button>
                     <a id="upi-deep-link" class="pill-btn pill-primary btn-block" href="#">
                       Open UPI App · Pay ₹500
                     </a>
@@ -585,6 +593,7 @@
   <!-- Single Polite Live Region for screen readers -->
   <div id="polite-announcer" aria-live="polite" class="visually-hidden"></div>
 
+  <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
