@@ -407,7 +407,7 @@
                   <div class="field">
                     <label for="upi-utr">Payment Reference / UTR ID (optional before paying)</label>
                     <span id="utr-hint" class="hint">12-digit UPI UTR or Razorpay Payment ID (e.g. 412345678901 or pay_... ).</span>
-                    <input type="text" id="upi-utr" name="upiUtr" inputmode="text" pattern="[A-Za-z0-9_-]{6,32}" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="done" aria-describedby="utr-hint" data-error="utr-error">
+                    <input type="text" id="upi-utr" name="upiUtr" inputmode="text" pattern="[A-Za-z0-9_\-]{6,32}" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="done" aria-describedby="utr-hint" data-error="utr-error">
                     <div id="utr-error" class="error-msg">
                       <span role="img" aria-label="Error">⚠</span> Reference ID should be 6–32 letters, numbers, underscores, or hyphens.
                     </div>
