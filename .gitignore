@@ -1,0 +1,14 @@
+# Environment secrets (never commit API secrets)
+.env
+.env.*
+!.env.example
+
+# Dependencies & build artifacts (if ever added)
+node_modules/
+dist/
+.vercel/
+.netlify/
+
+# OS & editor files
+.DS_Store
+Thumbs.db

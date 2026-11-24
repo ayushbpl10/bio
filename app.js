@@ -3,14 +3,24 @@ import { PROFILE } from "./data.js";
 import { renderQrSvg } from "./qr.js";
 
 /* ==========================================================================
-   1. Polyfill feature-detection (only load if missing)
+   1. Conditional Polyfill Loading (Popover)
    ========================================================================== */
 if (!Object.hasOwn(HTMLElement.prototype, "popover")) {
   import("https://unpkg.com/@oddbird/popover-polyfill@latest/dist/popover.min.js").catch(() => {});
 }
 
+const supportsScopedTransition = "startViewTransition" in Element.prototype;
+function runScopedTransition(scopeEl, updateDOM) {
+  if (!supportsScopedTransition || !scopeEl) {
+    updateDOM();
+    return;
+  }
+  const transition = scopeEl.startViewTransition(() => updateDOM());
+  transition.ready.catch(() => {});
+}
+
 /* ==========================================================================
-   2. Theme & Color Scheme Controller (dark-mode-toggle guidance)
+   2. Color Scheme & Titanium Finish Controller (dark-mode-toggle)
    ========================================================================== */
 const metaScheme = document.querySelector('meta[name="color-scheme"]');
 const systemDarkQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -60,12 +70,13 @@ function setStoredScheme(value) {
 function toggleComfortScheme() {
   const target = getResolvedScheme() === "dark" ? "light" : "dark";
   const sys = systemDarkQuery.matches ? "dark" : "light";
-  // If target matches current system preference, revert to system default
   setStoredScheme(target === sys ? null : target);
 }
 
+const VALID_PRESETS = ["ultramarine", "natural", "emerald", "cyber"];
+
 function applyPreset(preset) {
-  const safe = ["telemetry", "gopher", "solar", "blueprint"].includes(preset) ? preset : "telemetry";
+  const safe = VALID_PRESETS.includes(preset) ? preset : "ultramarine";
   document.documentElement.dataset.theme = safe;
   try {
     localStorage.setItem("accent-preset", safe);
@@ -79,7 +90,7 @@ function applyGrid(enabled) {
   document.documentElement.dataset.grid = enabled ? "on" : "off";
   if (gridToggle) gridToggle.checked = enabled;
   try {
-    localStorage.setItem("blueprint-grid", enabled ? "on" : "off");
+    localStorage.setItem("canvas-texture", enabled ? "on" : "off");
   } catch {}
 }
 
@@ -95,46 +106,53 @@ for (const btn of presetButtons) {
 }
 gridToggle?.addEventListener("change", () => applyGrid(gridToggle.checked));
 
-// Update resolved display when OS changes, without ever deleting a pinned preference
+// Update auto readout when OS shifts without removing any pinned preference
 systemDarkQuery.addEventListener("change", () => applyScheme(getStoredScheme()));
 
 window.addEventListener("storage", (e) => {
   if (e.key === "color-scheme") applyScheme(getStoredScheme());
-  if (e.key === "accent-preset") applyPreset(e.newValue || "telemetry");
-  if (e.key === "blueprint-grid") applyGrid(e.newValue !== "off");
+  if (e.key === "accent-preset") applyPreset(e.newValue || "ultramarine");
+  if (e.key === "canvas-texture") applyGrid(e.newValue !== "off");
 });
 
 applyScheme(getStoredScheme());
-applyPreset(document.documentElement.dataset.theme || "telemetry");
+applyPreset(document.documentElement.dataset.theme || "ultramarine");
 applyGrid(document.documentElement.dataset.grid !== "off");
 
 /* ==========================================================================
-   3. Tabbed Interface (tabs + search-hidden-content guidance)
+   3. Tabbed Interface + Scoped Transitions + Find-in-Page Sync
    ========================================================================== */
 const tablist = document.getElementById("profile-tablist");
+const panelsStage = document.getElementById("panels-stage");
 const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
 const panels = tabs.map((tab) =>
   document.querySelector(`[role="tabpanel"][aria-labelledby="${tab.id}"]`)
 );
 
-function selectTab(targetTab, { focusTab = false, updateHash = true } = {}) {
+function selectTab(targetTab, { focusTab = false, updateHash = true, animate = true } = {}) {
   if (!targetTab) return;
-  for (let i = 0; i < tabs.length; i++) {
-    const tab = tabs[i];
-    const panel = panels[i];
-    const selected = tab === targetTab;
-    tab.setAttribute("aria-selected", String(selected));
-    tab.toggleAttribute("focusgroupstart", selected);
-    if (selected) {
-      panel.removeAttribute("hidden");
-      if (!panel.querySelector("a, button, input, select, textarea, details")) {
-        panel.setAttribute("tabindex", "0");
+  const apply = () => {
+    for (let i = 0; i < tabs.length; i++) {
+      const tab = tabs[i];
+      const panel = panels[i];
+      const selected = tab === targetTab;
+      tab.setAttribute("aria-selected", String(selected));
+      tab.toggleAttribute("focusgroupstart", selected);
+      if (selected) {
+        panel.removeAttribute("hidden");
+        if (!panel.querySelector("a, button, input, select, textarea, details")) {
+          panel.setAttribute("tabindex", "0");
+        }
+      } else {
+        panel.hidden = "until-found";
+        panel.removeAttribute("tabindex");
       }
-    } else {
-      panel.hidden = "until-found";
-      panel.removeAttribute("tabindex");
     }
-  }
+  };
+
+  if (animate) runScopedTransition(panelsStage, apply);
+  else apply();
+
   targetTab.scrollIntoView({ block: "nearest", inline: "nearest", container: "nearest" });
   if (focusTab) targetTab.focus();
   if (updateHash && targetTab.dataset.hash) {
@@ -146,7 +164,6 @@ for (const tab of tabs) {
   tab.addEventListener("click", () => selectTab(tab));
 }
 
-// Keyboard navigation fallback for browsers without native focusgroup
 tablist.addEventListener("keydown", (e) => {
   const idx = tabs.indexOf(document.activeElement);
   if (idx === -1) return;
@@ -161,16 +178,14 @@ tablist.addEventListener("keydown", (e) => {
   }
 });
 
-// Sync tab when browser Find-in-page reveals a hidden="until-found" panel
-document.querySelector(".panels-stage").addEventListener("beforematch", (e) => {
+panelsStage.addEventListener("beforematch", (e) => {
   const matchedPanel = e.target.closest('[role="tabpanel"]');
   if (!matchedPanel) return;
   const tabId = matchedPanel.getAttribute("aria-labelledby");
   const tab = tabs.find((t) => t.id === tabId);
-  if (tab) selectTab(tab, { updateHash: false });
+  if (tab) selectTab(tab, { updateHash: false, animate: false });
 });
 
-// Tablist scrollability fade fallback if scroll-driven animations unsupported
 if (!CSS.supports("animation-timeline", "scroll()")) {
   const first = tablist.firstElementChild;
   const last = tablist.lastElementChild;
@@ -188,29 +203,120 @@ if (!CSS.supports("animation-timeline", "scroll()")) {
   }
 }
 
-// Deep-link via URL hash (#schedule, #experience, #overview)
 function syncTabFromHash() {
   const hash = location.hash.replace("#", "").toLowerCase();
   const match = tabs.find((t) => t.dataset.hash === hash);
-  if (match) selectTab(match, { updateHash: false });
+  if (match) selectTab(match, { updateHash: false, animate: false });
 }
 window.addEventListener("hashchange", syncTabFromHash);
 syncTabFromHash();
 
-// Jump-to-tab CTAs
 document.addEventListener("click", (e) => {
   const trigger = e.target.closest("[data-jump-tab]");
   if (!trigger) return;
   const target = document.getElementById(trigger.dataset.jumpTab);
   if (target) {
     selectTab(target, { focusTab: true });
-    target.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    document.getElementById("main-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 });
 
 /* ==========================================================================
-   4. Interactive Distributed Trace Simulator & Profile Content
+   4. Bento Pillars, Mentorship Modules, Capabilities, Trace & Timeline
    ========================================================================== */
+// Render Flagship Bento Showcase
+const pillarsGrid = document.getElementById("pillars-grid");
+PROFILE.pillars.forEach((pillar, idx) => {
+  const card = document.createElement("article");
+  card.className = "bento-card reveal-item";
+  if (idx === 0) card.classList.add("bento-hero");
+  else if (idx === 1) card.classList.add("bento-wide");
+
+  const badge = document.createElement("span");
+  badge.className = "bento-badge";
+  badge.textContent = pillar.badge;
+  const h3 = document.createElement("h3");
+  h3.textContent = pillar.title;
+  const p = document.createElement("p");
+  p.textContent = pillar.detail;
+  card.append(badge, h3, p);
+  pillarsGrid.append(card);
+});
+
+// Render Mentorship Connect Modules (jump straight to Schedule tab with focus preselected)
+const modulesEl = document.getElementById("mentorship-modules");
+PROFILE.sessionTopics.forEach((topic, idx) => {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "module-btn reveal-item";
+
+  const top = document.createElement("span");
+  top.className = "module-top";
+  const num = document.createElement("span");
+  num.className = "module-num";
+  num.textContent = `MODULE 0${idx + 1}`;
+  const cta = document.createElement("span");
+  cta.className = "module-cta";
+  cta.textContent = "Configure ₹500 →";
+  top.append(num, cta);
+
+  const title = document.createElement("span");
+  title.className = "module-title";
+  title.textContent = topic.title;
+
+  const sub = document.createElement("span");
+  sub.className = "module-sub";
+  sub.textContent = topic.subtitle;
+
+  btn.append(top, title, sub);
+  btn.addEventListener("click", () => {
+    const radio = document.querySelector(`input[name="topic"][value="${topic.id}"]`);
+    if (radio) {
+      radio.checked = true;
+      updateCheckoutSummary();
+    }
+    const schedTab = document.getElementById("tab-schedule");
+    selectTab(schedTab, { focusTab: true });
+    document.getElementById("main-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  modulesEl.append(btn);
+});
+
+// Persistent Capabilities Matrix with Scoped View Transitions (keeps DOM identity for match-element)
+const skillsGrid = document.getElementById("skills-grid");
+const filterChips = Array.from(document.querySelectorAll("[data-skill-filter]"));
+const skillNodes = PROFILE.skillsCatalog.map((skill) => {
+  const li = document.createElement("li");
+  li.className = "skill-item";
+  li.dataset.domain = skill.domain;
+  const name = document.createElement("span");
+  name.className = "skill-name";
+  name.textContent = skill.name;
+  const lvl = document.createElement("span");
+  lvl.className = "skill-level";
+  lvl.textContent = skill.level;
+  li.append(name, lvl);
+  skillsGrid.append(li);
+  return li;
+});
+
+function filterSkills(filter) {
+  runScopedTransition(skillsGrid, () => {
+    for (const li of skillNodes) {
+      const visible = filter === "all" || li.dataset.domain === filter;
+      li.hidden = !visible;
+    }
+  });
+}
+
+for (const chip of filterChips) {
+  chip.addEventListener("click", () => {
+    for (const c of filterChips) c.setAttribute("aria-pressed", String(c === chip));
+    filterSkills(chip.dataset.skillFilter);
+  });
+}
+
+// Trace Simulator
 const traceSpansEl = document.getElementById("trace-spans");
 const traceInspectorEl = document.getElementById("trace-inspector");
 
@@ -263,54 +369,6 @@ PROFILE.traceSpans.forEach((span, idx) => {
   traceSpansEl.append(btn);
 });
 renderTraceInspector(PROFILE.traceSpans[0]);
-
-// Pillars
-const pillarsGrid = document.getElementById("pillars-grid");
-for (const pillar of PROFILE.pillars) {
-  const card = document.createElement("article");
-  card.className = "pillar-card";
-  const badge = document.createElement("span");
-  badge.className = "pillar-badge";
-  badge.textContent = pillar.badge;
-  const h3 = document.createElement("h3");
-  h3.textContent = pillar.title;
-  const p = document.createElement("p");
-  p.textContent = pillar.detail;
-  card.append(badge, h3, p);
-  pillarsGrid.append(card);
-}
-
-// Filterable Skills Catalog
-const skillsGrid = document.getElementById("skills-grid");
-const filterChips = Array.from(document.querySelectorAll("[data-skill-filter]"));
-
-function renderSkills(filter) {
-  skillsGrid.innerHTML = "";
-  const items =
-    filter === "all"
-      ? PROFILE.skillsCatalog
-      : PROFILE.skillsCatalog.filter((s) => s.domain === filter);
-  for (const skill of items) {
-    const li = document.createElement("li");
-    li.className = "skill-item";
-    const name = document.createElement("span");
-    name.className = "skill-name";
-    name.textContent = skill.name;
-    const lvl = document.createElement("span");
-    lvl.className = "skill-level";
-    lvl.textContent = skill.level;
-    li.append(name, lvl);
-    skillsGrid.append(li);
-  }
-}
-
-for (const chip of filterChips) {
-  chip.addEventListener("click", () => {
-    for (const c of filterChips) c.setAttribute("aria-pressed", String(c === chip));
-    renderSkills(chip.dataset.skillFilter);
-  });
-}
-renderSkills("all");
 
 // Experience Timeline
 const timelineEl = document.getElementById("experience-timeline");
@@ -385,7 +443,7 @@ document.getElementById("collapse-all-exp")?.addEventListener("click", () => {
 });
 
 /* ==========================================================================
-   5. Toast & Polite Live Region Notifications
+   5. Toast Notifications & Single Polite Announcer
    ========================================================================== */
 const politeAnnouncer = document.getElementById("polite-announcer");
 const toastEl = document.getElementById("status-toast");
@@ -393,7 +451,6 @@ const toastMsgEl = document.getElementById("toast-message");
 let toastTimer = null;
 
 function showToast(message) {
-  // Never surface background toasts while a modal dialog is open
   if (document.querySelector("dialog[open]")) return;
   toastMsgEl.textContent = message;
   try {
@@ -420,7 +477,7 @@ function showToast(message) {
 }
 
 /* ==========================================================================
-   6. Copy Buttons (copy-button guidance: command="--copy" + fallback)
+   6. Copy Buttons (Invoker command="--copy" + fallback)
    ========================================================================== */
 const copyTimers = new WeakMap();
 let lastCopyAnnouncement = "";
@@ -494,7 +551,7 @@ if (!("CommandEvent" in window)) {
 }
 
 /* ==========================================================================
-   7. Schedule a 1-Hour Session (₹500 INR) + UPI QR + Validation
+   7. Schedule a 1-Hour Session (₹500 INR) + UPI QR + Razorpay Handle
    ========================================================================== */
 const bookingForm = document.getElementById("booking-form");
 const topicOptionsEl = document.getElementById("topic-options");
@@ -518,20 +575,23 @@ const visitorTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolk
 localTzEl.textContent = visitorTz;
 
 const isLiveUpiConfigured = Boolean(SITE_CONFIG.upiId && SITE_CONFIG.upiId.trim());
-if (!isLiveUpiConfigured) {
+const isLiveRazorpayConfigured = Boolean(
+  SITE_CONFIG.razorpayPaymentLink && SITE_CONFIG.razorpayPaymentLink.trim()
+);
+
+if (!isLiveUpiConfigured && !isLiveRazorpayConfigured) {
   setupNoticeEl.hidden = false;
   upiIdValueEl.textContent = "Set upiId in config.js";
   upiCaptionEl.textContent = "Preview UPI QR (₹500 INR) — update config.js to go live";
 } else {
-  upiIdValueEl.textContent = SITE_CONFIG.upiId.trim();
+  upiIdValueEl.textContent = isLiveUpiConfigured ? SITE_CONFIG.upiId.trim() : "Via Razorpay below";
 }
 
-if (SITE_CONFIG.razorpayPaymentLink) {
-  razorpayLinkEl.href = SITE_CONFIG.razorpayPaymentLink;
+if (isLiveRazorpayConfigured) {
+  razorpayLinkEl.href = SITE_CONFIG.razorpayPaymentLink.trim();
   razorpayLinkEl.hidden = false;
 }
 
-// Format YYYY-MM-DD in IST
 function getIstDateString(dateObj) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
@@ -543,7 +603,7 @@ function getIstDateString(dateObj) {
 
 function getIstWeekday(dateStr) {
   const dt = new Date(`${dateStr}T12:00:00+05:30`);
-  const day = dt.getUTCDay(); // 12:00 IST is 06:30 UTC same calendar day
+  const day = dt.getUTCDay();
   return {
     isWeekend: day === 0 || day === 6,
     dayShort: new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "Asia/Kolkata" }).format(dt),
@@ -571,7 +631,6 @@ function formatVisitorLocalSlot(dateStr, slot) {
   return `Your time: ${fmt.format(start)} – ${fmt.format(end)}`;
 }
 
-// Render Topics
 PROFILE.sessionTopics.forEach((topic, idx) => {
   const label = document.createElement("label");
   label.className = "radio-card";
@@ -596,7 +655,6 @@ PROFILE.sessionTopics.forEach((topic, idx) => {
   topicOptionsEl.append(label);
 });
 
-// Date limits & quick 14-day chips
 const todayIst = getIstDateString(new Date());
 dateInput.min = todayIst;
 const upcomingDates = [];
@@ -840,7 +898,7 @@ bookingForm.addEventListener(
 );
 
 /* ==========================================================================
-   9. Booking Submission, .ics Calendar Invite & Native <dialog> Modals
+   9. Booking Pass, .ics Invite & Animated Native <dialog> Modals
    ========================================================================== */
 const bookingDialog = document.getElementById("booking-dialog");
 const dialogSubtitle = document.getElementById("dialog-subtitle");
@@ -850,6 +908,43 @@ const gcalLinkBtn = document.getElementById("gcal-link-btn");
 const sendConfirmBtn = document.getElementById("send-confirm-btn");
 
 let activeBooking = null;
+
+// Animate-to-from-top-layer exit fallback for Firefox / Safari
+let supportsDisplayTransition;
+function canTransitionDisplay() {
+  if (supportsDisplayTransition !== undefined) return supportsDisplayTransition;
+  if (!window.CSS?.supports?.("transition-behavior", "allow-discrete") || !document.body) {
+    return false;
+  }
+  const probe = document.createElement("div");
+  probe.style.cssText = "transition: display 1s allow-discrete !important; display: block;";
+  document.body.appendChild(probe);
+  getComputedStyle(probe).display;
+  probe.style.display = "none";
+  supportsDisplayTransition = getComputedStyle(probe).display === "block";
+  probe.remove();
+  return supportsDisplayTransition;
+}
+
+function supportsTopLayerExit() {
+  return window.CSS?.supports?.("overlay", "auto") && canTransitionDisplay();
+}
+
+async function closeTopLayer(dialog) {
+  if (!supportsTopLayerExit()) {
+    dialog.setAttribute("data-closing", "");
+    const animations = dialog.getAnimations({ subtree: true });
+    if (animations.length > 0) {
+      await Promise.race([
+        Promise.allSettled(animations.map((a) => a.finished)),
+        new Promise((r) => setTimeout(r, 1000)),
+      ]);
+    }
+    if (!dialog.hasAttribute("data-closing")) return;
+    dialog.removeAttribute("data-closing");
+  }
+  dialog.close();
+}
 
 function formatIcsUtc(dateObj) {
   return dateObj.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
@@ -863,7 +958,7 @@ function buildIcsContent(booking) {
     `Booking ID: ${booking.id}`,
     `Topic: ${booking.topicTitle}`,
     `Fee: ₹${SITE_CONFIG.sessionFeeInr} INR`,
-    booking.utr ? `UPI Ref / UTR: ${booking.utr}` : "UPI Ref / UTR: Pending verification",
+    booking.utr ? `Payment Ref / UTR: ${booking.utr}` : "Payment Ref / UTR: Pending verification",
     `Agenda: ${booking.agenda.replace(/\r?\n/g, " ")}`,
     `Platform: ${SITE_CONFIG.meetingPlatform}`,
   ].join("\\n");
@@ -906,7 +1001,7 @@ function buildGcalUrl(booking) {
     action: "TEMPLATE",
     text: `1:1 Session with ${SITE_CONFIG.ownerName} — ${booking.topicTitle}`,
     dates: `${start}/${end}`,
-    details: `Booking ID: ${booking.id}\nFee: ₹${SITE_CONFIG.sessionFeeInr} INR\nUTR: ${booking.utr || "Pending"}\nAgenda: ${booking.agenda}`,
+    details: `Booking ID: ${booking.id}\nFee: ₹${SITE_CONFIG.sessionFeeInr} INR\nUTR / Payment ID: ${booking.utr || "Pending"}\nAgenda: ${booking.agenda}`,
     location: SITE_CONFIG.meetingPlatform,
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
@@ -939,7 +1034,7 @@ function openBookingDialog(booking) {
     ["Topic", booking.topicTitle],
     ["When (IST)", `${booking.dateLabel} · ${booking.slotLabel}`],
     ["Duration & Fee", `60 Minutes · ₹${SITE_CONFIG.sessionFeeInr} INR`],
-    ["Payment Ref (UTR)", booking.utr || "Pending / Pay via UPI QR"],
+    ["Payment Ref (UTR)", booking.utr || "Pending / Pay via UPI QR or Razorpay"],
     ["Agenda", booking.agenda],
   ];
   for (const [k, v] of rows) {
@@ -956,7 +1051,7 @@ function openBookingDialog(booking) {
   if (SITE_CONFIG.contactEmail) {
     const mailParams = new URLSearchParams({
       subject: `[1:1 Session Booking ${booking.id}] ${booking.topicTitle}`,
-      body: `Hi Ayush,\n\nI booked a 1-hour session (₹500 INR).\nBooking ID: ${booking.id}\nDate & Time: ${booking.dateLabel} (${booking.slotLabel})\nUTR: ${booking.utr || "Attaching screenshot"}\nAgenda: ${booking.agenda}\n\nThanks,\n${booking.name}`,
+      body: `Hi Ayush,\n\nI booked a 1-hour session (₹500 INR).\nBooking ID: ${booking.id}\nDate & Time: ${booking.dateLabel} (${booking.slotLabel})\nUTR / Payment ID: ${booking.utr || "Attaching screenshot"}\nAgenda: ${booking.agenda}\n\nThanks,\n${booking.name}`,
     });
     sendConfirmBtn.href = `mailto:${SITE_CONFIG.contactEmail}?${mailParams.toString()}`;
     sendConfirmBtn.textContent = "Email Confirmation ↗";
@@ -979,7 +1074,7 @@ function renderSavedBookings() {
     info.textContent = `${b.id} · ${b.dateLabel}`;
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "btn btn-ghost btn-compact";
+    btn.className = "pill-btn pill-ghost btn-compact";
     btn.textContent = "View Pass";
     btn.addEventListener("click", () => openBookingDialog(b));
     li.append(info, btn);
@@ -995,11 +1090,7 @@ downloadIcsBtn.addEventListener("click", () => {
 bookingForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const slot = getSelectedSlot();
-  if (!slot) {
-    slotErrorEl.hidden = false;
-  } else {
-    slotErrorEl.hidden = true;
-  }
+  slotErrorEl.hidden = Boolean(slot);
 
   if (!bookingForm.checkValidity() || !slot) {
     const firstInvalid = bookingForm.querySelector(":invalid");
@@ -1036,14 +1127,17 @@ bookingForm.addEventListener("submit", (e) => {
   openBookingDialog(booking);
 });
 
-// Reset dialog.returnValue on close per dialog guide
 for (const dlg of document.querySelectorAll("dialog")) {
   dlg.addEventListener("close", () => {
+    dlg.removeAttribute("data-closing");
     dlg.returnValue = "";
+  });
+  dlg.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeTopLayer(dlg);
   });
 }
 
-// Fallback for closedby="any" (pointerdown + pointerup outside dialog rect)
 if (!("closedBy" in HTMLDialogElement.prototype)) {
   const outside = (e, dialog) => {
     const r = dialog.getBoundingClientRect();
@@ -1055,23 +1149,24 @@ if (!("closedBy" in HTMLDialogElement.prototype)) {
       pressedOutside = outside(e, dialog);
     });
     dialog.addEventListener("pointerup", (e) => {
-      if (pressedOutside && outside(e, dialog)) dialog.close();
+      if (pressedOutside && outside(e, dialog)) closeTopLayer(dialog);
     });
   }
 }
 
-// Fallback for command="close" on dialog buttons
-if (!("commandForElement" in HTMLButtonElement.prototype)) {
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest('button[command="close"]');
-    if (!btn) return;
-    const dlg = document.getElementById(btn.getAttribute("commandfor"));
-    dlg?.close();
-  });
-}
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest('button[command="close"]');
+  if (!btn) return;
+  if ("commandForElement" in HTMLButtonElement.prototype && supportsTopLayerExit()) return;
+  const dlg = document.getElementById(btn.getAttribute("commandfor"));
+  if (dlg) {
+    e.preventDefault();
+    closeTopLayer(dlg);
+  }
+});
 
 /* ==========================================================================
-   10. Command Palette (Ctrl+K / Cmd+K)
+   10. Spotlight Quick Command Palette (Ctrl+K / Cmd+K)
    ========================================================================== */
 const commandDialog = document.getElementById("command-dialog");
 document.getElementById("cmd-open-btn")?.addEventListener("click", () => commandDialog.showModal());
@@ -1079,7 +1174,7 @@ document.getElementById("cmd-open-btn")?.addEventListener("click", () => command
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
     e.preventDefault();
-    if (commandDialog.open) commandDialog.close();
+    if (commandDialog.open) closeTopLayer(commandDialog);
     else commandDialog.showModal();
   }
 });
@@ -1088,12 +1183,15 @@ commandDialog.addEventListener("click", (e) => {
   const item = e.target.closest("[data-cmd-action]");
   if (!item) return;
   const action = item.dataset.cmdAction;
-  commandDialog.close();
+  closeTopLayer(commandDialog);
   if (action.startsWith("tab:")) {
     const tab = document.getElementById(action.slice(4));
-    if (tab) selectTab(tab, { focusTab: true });
+    if (tab) {
+      selectTab(tab, { focusTab: true });
+      document.getElementById("main-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   } else if (action === "theme:toggle") {
     toggleComfortScheme();
-    showToast(`Switched to ${getResolvedScheme()} theme`);
+    showToast(`Switched to ${getResolvedScheme()} appearance`);
   }
 });
