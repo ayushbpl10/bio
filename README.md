@@ -18,4 +18,4 @@ Edit [`config.js`](./config.js) to set your live payment & contact details:
 - `contactEmail`: Optional email for pre-filled booking confirmations
 
 ## Deployment
-Configured with [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) for automatic deployment to GitHub Pages on push to `main`.
+Hosted directly from the `main` branch via GitHub Pages (`.nojekyll` enabled for zero-build static ES modules).

@@ -18,7 +18,7 @@ export const SITE_CONFIG = {
 
   // Set your real UPI VPA here (e.g. "ayushgupta@okaxis") to activate live UPI QR payments.
   // When left empty, the booking tab runs in Preview/Request mode and generates a demo QR + booking pass.
-  upiId: "",
+  upiId: "ayushbpl10@ybl",
   upiPayeeName: "Ayush Gupta",
 
   // Optional: Add a Razorpay Payment Link or Topmate URL if you also accept cards/netbanking.
