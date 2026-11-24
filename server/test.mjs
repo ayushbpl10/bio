@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import test from "node:test";
 import {
   createGoogleMeetEvent,
@@ -10,7 +11,14 @@ import {
   sendBookingNotificationEmail,
 } from "./notifications.js";
 import { handleCreateOrder, handleVerifyPayment } from "./razorpay-handlers.js";
-import { createAppServer, readJsonBody, startServer } from "./server.js";
+import { createAppServer, readJsonBody, runCli, startServer } from "./server.js";
+import {
+  buildGoogleAuthUrl,
+  exchangeAuthCode,
+  extractAuthCode,
+  runTokenCli,
+  startTokenHelper,
+} from "./get-google-token.mjs";
 
 test("create-order validates credentials, paise minimums, types, and errors", async () => {
   const missingCreds = await handleCreateOrder({ body: {}, razorpayClient: null, keyId: "" });
@@ -48,6 +56,34 @@ test("create-order validates credentials, paise minimums, types, and errors", as
     currency: "INR",
     key_id: "rzp_test_dummy",
   });
+
+  const customFields = await handleCreateOrder({
+    body: {
+      amount: 50000,
+      currency: " inr ",
+      receipt: "rcpt_meta_1",
+      topic: "microservices",
+      slot: "2026-12-01 6 PM",
+    },
+    razorpayClient: client,
+    keyId: "rzp_test_dummy",
+  });
+  assert.equal(customFields.status, 200);
+
+  const authNestedFail = await handleCreateOrder({
+    body: { amount: 50000 },
+    razorpayClient: {
+      orders: {
+        create: async () => {
+          const e = new Error("Nested Auth failed");
+          e.error = { statusCode: 401 };
+          throw e;
+        },
+      },
+    },
+    keyId: "rzp_test_dummy",
+  });
+  assert.equal(authNestedFail.status, 401);
 
   const authFail = await handleCreateOrder({
     body: { amount: 50000 },
@@ -252,6 +288,108 @@ test("Google Meet and Gmail notifications handle success, fallbacks, and errors 
   assert.equal(partial.meet_url, "https://meet.google.com/fallback");
   assert.equal(partial.email_sent, false);
   assert.equal(partial.errors.length, 2);
+
+  // Calendar video entryPoint fallback + bad JSON resilience + same email & minimal booking fields
+  const entryPointMeet = await createGoogleMeetEvent({
+    booking: {
+      id: "AG-EP",
+      name: "",
+      email: "ayushbpl10@gmail.com",
+      dateStr: "2026-12-01",
+      profile: "https://linkedin.com/in/ayush",
+    },
+    env: {
+      GOOGLE_CLIENT_ID: "cid",
+      GOOGLE_CLIENT_SECRET: "csec",
+      GOOGLE_REFRESH_TOKEN: "rtok",
+      BOOKING_NOTIFY_EMAIL: "ayushbpl10@gmail.com",
+    },
+    fetchImpl: async (url) => {
+      if (url.includes("oauth2.googleapis.com")) {
+        return { ok: true, status: 200, json: async () => ({ access_token: "tok" }) };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          conferenceData: {
+            entryPoints: [{ entryPointType: "phone", uri: "tel:+1" }, { entryPointType: "video", uri: "https://meet.google.com/entry-point-meet" }],
+          },
+        }),
+      };
+    },
+  });
+  assert.equal(entryPointMeet.meetUrl, "https://meet.google.com/entry-point-meet");
+
+  const staticFallbackCreated = await createGoogleMeetEvent({
+    booking: { id: "AG-ST", name: "Guest", email: "g@example.com", dateStr: "2026-12-01" },
+    env: {
+      GOOGLE_CLIENT_ID: "cid",
+      GOOGLE_CLIENT_SECRET: "csec",
+      GOOGLE_REFRESH_TOKEN: "rtok",
+      STATIC_MEET_URL: "https://meet.google.com/static-fallback",
+    },
+    fetchImpl: async (url) => {
+      if (url.includes("oauth2.googleapis.com")) {
+        return { ok: true, status: 200, json: async () => ({ access_token: "tok" }) };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    },
+  });
+  assert.equal(staticFallbackCreated.meetUrl, "https://meet.google.com/static-fallback");
+
+  await assert.rejects(
+    () =>
+      createGoogleMeetEvent({
+        booking: { id: "AG-BADJSON-1", dateStr: "2026-12-01" },
+        env: { GOOGLE_CLIENT_ID: "cid", GOOGLE_CLIENT_SECRET: "csec", GOOGLE_REFRESH_TOKEN: "rtok" },
+        fetchImpl: async () => ({
+          ok: false,
+          status: 500,
+          json: async () => {
+            throw new Error("invalid json");
+          },
+        }),
+      }),
+    /Failed to refresh Google OAuth token/
+  );
+
+  await assert.rejects(
+    () =>
+      createGoogleMeetEvent({
+        booking: { id: "AG-BADJSON-2", dateStr: "2026-12-01" },
+        env: { GOOGLE_CLIENT_ID: "cid", GOOGLE_CLIENT_SECRET: "csec", GOOGLE_REFRESH_TOKEN: "rtok" },
+        fetchImpl: async (url) => {
+          if (url.includes("oauth2.googleapis.com")) {
+            return { ok: true, status: 200, json: async () => ({ access_token: "tok" }) };
+          }
+          return {
+            ok: false,
+            status: 502,
+            json: async () => {
+              throw new Error("bad cal json");
+            },
+          };
+        },
+      }),
+    /Google Calendar API error/
+  );
+
+  const minimalMail = [];
+  const sameEmailMail = await sendBookingNotificationEmail({
+    booking: {
+      id: "AG-SELF",
+      name: "Ayush",
+      email: "ayushbpl10@gmail.com",
+      dateStr: "2026-12-01",
+      profile: "https://github.com/ayushbpl10",
+    },
+    meetUrl: "",
+    env: { GMAIL_APP_PASSWORD: "pass" },
+    createTransportImpl: () => ({ sendMail: async (m) => minimalMail.push(m) }),
+  });
+  assert.equal(sameEmailMail.sent, true);
+  assert.equal(minimalMail[0].cc, undefined);
 });
 
 test("HTTP server covers CORS, OPTIONS, 405, 404, bad JSON, 413, create-order, verify-payment+Meet/Mail, and book-session", async () => {
@@ -320,7 +458,7 @@ test("HTTP server covers CORS, OPTIONS, 405, 404, bad JSON, 413, create-order, v
     assert.equal(emptyPost.status, 400);
 
     const reqEmitter = new EventEmitter();
-    reqEmitter.pause = () => {};
+    reqEmitter.pause = () => { };
     const bodyErrPromise = readJsonBody(reqEmitter);
     reqEmitter.emit("error", new Error("Stream reset"));
     await assert.rejects(() => bodyErrPromise, /Stream reset/);
@@ -333,6 +471,17 @@ test("HTTP server covers CORS, OPTIONS, 405, 404, bad JSON, 413, create-order, v
     });
     await new Promise((resolve) => started.once("listening", resolve));
     await new Promise((resolve) => started.close(resolve));
+
+    const cliNoop = runCli(["node", "other.js"], { PORT: "0" }, new URL("./server.js", import.meta.url).href);
+    assert.equal(cliNoop, null);
+
+    const cliStarted = runCli(
+      ["node", "./server.js"],
+      { PORT: "0", HOST: "127.0.0.1", RAZORPAY_KEY_ID: "rzp_test_cli", RAZORPAY_KEY_SECRET: "sec_cli" },
+      new URL("./server.js", import.meta.url).href
+    );
+    await new Promise((resolve) => cliStarted.once("listening", resolve));
+    await new Promise((resolve) => cliStarted.close(resolve));
 
     const cliProc = spawn(process.execPath, ["server.js"], {
       env: { ...process.env, PORT: "0", HOST: "127.0.0.1" },
@@ -425,7 +574,78 @@ test("HTTP server covers CORS, OPTIONS, 405, 404, bad JSON, 413, create-order, v
     assert.equal(tueJson.email_sent, true);
     assert.equal(tueJson.meet_url, "https://meet.google.com/http-meet-url");
     assert.equal(emailsSent.length, 2);
+
+    const healthJson = await (await fetch(`${baseUrl}/health`)).json();
+    assert.equal(healthJson.ok, true);
+    assert.equal(healthJson.configured, true);
+    assert.equal(healthJson.email_configured, true);
+    assert.equal(healthJson.meet_configured, true);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test("get-google-token helpers build OAuth URLs, extract codes, and handle callback & stdin", async () => {
+  const authUrl = buildGoogleAuthUrl({
+    clientId: "cid_test",
+    redirectUri: "http://127.0.0.1:8919/oauth2callback",
+  });
+  assert.match(authUrl, /accounts\.google\.com\/o\/oauth2\/v2\/auth/);
+  assert.match(authUrl, /scope=https%3A%2F%2Fwww\.googleapis\.com%2Fauth%2Fcalendar\.events/);
+
+  assert.equal(extractAuthCode(""), "");
+  assert.equal(extractAuthCode("4/raw-code"), "4/raw-code");
+  assert.equal(extractAuthCode("http://127.0.0.1:8919/oauth2callback?code=4/url-code"), "4/url-code");
+  assert.equal(extractAuthCode("not a url code=broken"), "");
+
+  const exchanged = await exchangeAuthCode({
+    code: "4/test",
+    clientId: "cid",
+    clientSecret: "csec",
+    redirectUri: "http://127.0.0.1:8919/oauth2callback",
+    fetchImpl: async () => ({ json: async () => ({ refresh_token: "1//ref_tok" }) }),
+  });
+  assert.equal(exchanged.refresh_token, "1//ref_tok");
+
+  assert.equal(startTokenHelper({ env: {} }), null);
+  assert.equal(runTokenCli(["node", "other.js"], {}, new URL("./get-google-token.mjs", import.meta.url).href), null);
+  const errs = [];
+  const prevExit = process.exitCode;
+  runTokenCli(["node", "./get-google-token.mjs"], {}, new URL("./get-google-token.mjs", import.meta.url).href, (m) => errs.push(m));
+  assert.equal(errs.length, 1);
+  process.exitCode = prevExit;
+
+  const logs = [];
+  const { server } = startTokenHelper({
+    env: { GOOGLE_CLIENT_ID: "cid", GOOGLE_CLIENT_SECRET: "csec" },
+    redirectPort: 0,
+    fetchImpl: async () => ({ json: async () => ({ refresh_token: "1//http_cb_tok" }) }),
+    inStream: new PassThrough(),
+    outStream: new PassThrough(),
+    log: (m) => logs.push(m),
+  });
+  await new Promise((r) => server.once("listening", r));
+  const { port } = server.address();
+  const miss = await fetch(`http://127.0.0.1:${port}/oauth2callback`);
+  assert.match(await miss.text(), /Missing code/);
+  const hit = await fetch(`http://127.0.0.1:${port}/oauth2callback?code=4/cb_ok`);
+  assert.match(await hit.text(), /Authorization received/);
+  assert.ok(logs.some((l) => String(l).includes("1//http_cb_tok")));
+
+  const fakeIn = new PassThrough();
+  const fakeOut = new PassThrough();
+  const stdinLogs = [];
+  const helper2 = startTokenHelper({
+    env: { GOOGLE_CLIENT_ID: "cid", GOOGLE_CLIENT_SECRET: "csec" },
+    redirectPort: 0,
+    fetchImpl: async () => ({ json: async () => ({ error: "bad_code" }) }),
+    inStream: fakeIn,
+    outStream: fakeOut,
+    log: (m) => stdinLogs.push(m),
+  });
+  await new Promise((r) => helper2.server.once("listening", r));
+  fakeIn.write("\n");
+  fakeIn.write("4/pasted-code\n");
+  await new Promise((r) => setTimeout(r, 80));
+  assert.ok(stdinLogs.some((l) => String(l).includes("bad_code")));
 });

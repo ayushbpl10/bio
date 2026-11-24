@@ -827,9 +827,10 @@ body {
 
 .tablist-dock {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   margin-block-end: 1.35rem;
   border-block-end: 1px solid var(--border);
+  max-inline-size: 100%;
 }
 
 .tablist {
@@ -837,6 +838,8 @@ body {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  margin-inline: auto;
+  max-inline-size: 100%;
   overflow-x: auto;
   scrollbar-width: none;
   scroll-snap-type: inline proximity;
@@ -953,10 +956,14 @@ body {
 /* Panels Stage: single grid cell; styling lives ONLY inside .panel-surface */
 .panels-stage {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 [role="tabpanel"] {
   grid-area: 1 / 1;
+  min-inline-size: 0;
+  inline-size: 100%;
+  max-inline-size: 100%;
 }
 
 .panel-surface {
@@ -965,6 +972,8 @@ body {
   border-radius: var(--radius-xl);
   padding: clamp(1.35rem, 3vw, 2.5rem);
   box-shadow: var(--shadow-card);
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 
 .stage-heading {
@@ -1584,15 +1593,18 @@ body {
 
 .booking-layout {
   display: grid;
-  grid-template-columns: 1.28fr 0.92fr;
+  grid-template-columns: minmax(0, 1.28fr) minmax(0, 0.92fr);
   gap: 1.65rem;
   align-items: start;
+  min-inline-size: 0;
 }
 
 .booking-form {
   display: flex;
   flex-direction: column;
   gap: 1.35rem;
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 
 .form-fieldset {
@@ -1601,6 +1613,8 @@ body {
   padding: 1.25rem;
   margin: 0;
   background: var(--surface-alt);
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 
 .form-fieldset legend {
@@ -1641,7 +1655,14 @@ body {
   border: 1px solid var(--control-border);
   background: var(--surface);
   cursor: pointer;
+  min-inline-size: 0;
   transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.radio-card > span {
+  min-inline-size: 0;
+  flex: 1 1 auto;
+  overflow-wrap: break-word;
 }
 
 .radio-card input[type="radio"] {
@@ -1679,6 +1700,9 @@ body {
   display: flex;
   gap: 0.45rem;
   overflow-x: auto;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  scroll-snap-type: inline proximity;
   padding-block-end: 0.5rem;
   margin-block-end: 0.85rem;
 }
@@ -1899,6 +1923,8 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 1.05rem;
+  min-inline-size: 0;
+  max-inline-size: 100%;
   background: linear-gradient(
     160deg,
     color-mix(in oklab, var(--accent-soft) 65%, var(--surface)),
@@ -1951,7 +1977,8 @@ textarea {
 .summary-list > div {
   display: flex;
   justify-content: space-between;
-  gap: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
 }
 
 .summary-list dt {
@@ -1962,6 +1989,8 @@ textarea {
   margin: 0;
   font-weight: 600;
   text-align: end;
+  overflow-wrap: anywhere;
+  max-inline-size: 100%;
 }
 
 .summary-total {
@@ -1985,6 +2014,8 @@ textarea {
   align-items: center;
   gap: 0.75rem;
   text-align: center;
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 
 .qr-frame {
@@ -2015,6 +2046,7 @@ textarea {
   justify-content: space-between;
   gap: 0.4rem;
   inline-size: 100%;
+  min-inline-size: 0;
   padding: 0.45rem 0.7rem;
   border-radius: var(--radius-sm);
   background: var(--surface-alt);
@@ -2024,6 +2056,8 @@ textarea {
 }
 
 .upi-id-row code {
+  min-inline-size: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2544,7 +2578,7 @@ dialog[open]:where(:not([data-closing]))::backdrop {
   }
   .trace-body,
   .booking-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .checkout-card {
     position: static;
@@ -2555,6 +2589,16 @@ dialog[open]:where(:not([data-closing]))::backdrop {
   .hide-sm {
     display: none;
   }
+  .header-capsule {
+    border-radius: var(--radius-lg);
+    padding: 0.5rem 0.65rem;
+    gap: 0.5rem;
+  }
+  .tablist [role="tab"] {
+    padding: 0.55rem 0.85rem;
+    font-size: 0.86rem;
+    min-block-size: 44px;
+  }
   .spec-dock {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2563,10 +2607,47 @@ dialog[open]:where(:not([data-closing]))::backdrop {
   .topic-grid,
   .date-slot-row,
   .field-row-2 {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .bento-card.bento-hero {
     grid-column: span 1;
+  }
+  .panel-surface {
+    padding: 1.1rem;
+    border-radius: var(--radius-lg);
+  }
+  .dialog-shell {
+    padding: 1.05rem;
+  }
+  .dialog-actions {
+    flex-direction: column;
+  }
+  .dialog-actions > * {
+    inline-size: 100%;
+    justify-content: center;
+  }
+  dialog {
+    inline-size: min(94vw, 560px);
+    max-inline-size: calc(100vw - 1rem);
+  }
+  .pill-btn,
+  .btn-compact,
+  .icon-close-btn,
+  .copy-button,
+  .seg-btn,
+  .filter-chip,
+  .span-btn {
+    min-block-size: 44px;
+  }
+  .copy-button,
+  .icon-close-btn {
+    min-inline-size: 44px;
+  }
+  .footer-links a,
+  .link-btn {
+    min-block-size: 44px;
+    display: inline-flex;
+    align-items: center;
   }
 }
 
@@ -2576,5 +2657,29 @@ dialog[open]:where(:not([data-closing]))::backdrop {
   }
   .brand-role {
     display: none;
+  }
+  .tab-price-chip {
+    display: none;
+  }
+  .spec-dock,
+  .segmented,
+  .preset-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .segmented {
+    border-radius: var(--radius-md);
+  }
+  .panel-surface {
+    padding: 0.95rem;
+    border-radius: var(--radius-md);
+  }
+  .form-fieldset,
+  .checkout-card {
+    padding: 0.9rem;
+  }
+  .qr-frame {
+    inline-size: min(172px, 100%);
+    block-size: auto;
+    aspect-ratio: 1;
   }
 }

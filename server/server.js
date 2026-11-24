@@ -104,6 +104,10 @@ export function createAppServer(overrides = {}) {
       sendJson(res, 200, {
         ok: true,
         configured: Boolean(cfg.razorpayClient),
+        email_configured: Boolean(cfg.env?.GMAIL_APP_PASSWORD),
+        meet_configured: Boolean(
+          cfg.env?.GOOGLE_CLIENT_ID && cfg.env?.GOOGLE_CLIENT_SECRET && cfg.env?.GOOGLE_REFRESH_TOKEN
+        ),
       });
       return;
     }
@@ -182,7 +186,12 @@ export function startServer(env = process.env) {
   });
 }
 
-const entryHref = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : "";
-if (import.meta.url === entryHref) {
-  startServer();
+export function runCli(argv = process.argv, env = process.env, entryUrl = import.meta.url) {
+  const entryHref = argv[1] ? pathToFileURL(path.resolve(argv[1])).href : "";
+  if (entryUrl === entryHref) {
+    return startServer(env);
+  }
+  return null;
 }
+
+runCli();

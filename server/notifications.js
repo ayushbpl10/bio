@@ -123,7 +123,12 @@ export async function createGoogleMeetEvent({ booking, env = process.env, fetchI
 /**
  * Sends confirmation email via free Gmail SMTP (App Password) to ayushbpl10@gmail.com & guest.
  */
-export async function sendBookingNotificationEmail({ booking, meetUrl, env = process.env, createTransportImpl }) {
+export async function sendBookingNotificationEmail({
+  booking,
+  meetUrl,
+  env = process.env,
+  createTransportImpl = nodemailer.createTransport,
+}) {
   const notifyEmail = env.BOOKING_NOTIFY_EMAIL || DEFAULT_NOTIFY_EMAIL;
   const gmailUser = env.GMAIL_USER || notifyEmail;
   const gmailPass = env.GMAIL_APP_PASSWORD || "";
@@ -136,11 +141,7 @@ export async function sendBookingNotificationEmail({ booking, meetUrl, env = pro
     };
   }
 
-  const makeTransport =
-    createTransportImpl ||
-    ((opts) => nodemailer.createTransport(opts));
-
-  const transporter = makeTransport({
+  const transporter = createTransportImpl({
     service: "gmail",
     auth: {
       user: gmailUser,

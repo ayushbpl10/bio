@@ -6,7 +6,7 @@ import { renderQrSvg } from "./qr.js";
    1. Conditional Polyfill Loading (Popover)
    ========================================================================== */
 if (!Object.hasOwn(HTMLElement.prototype, "popover")) {
-  import("https://unpkg.com/@oddbird/popover-polyfill@latest/dist/popover.min.js").catch(() => {});
+  import("https://unpkg.com/@oddbird/popover-polyfill@latest/dist/popover.min.js").catch(() => { });
 }
 
 const supportsScopedTransition = "startViewTransition" in Element.prototype;
@@ -16,7 +16,7 @@ function runScopedTransition(scopeEl, updateDOM) {
     return;
   }
   const transition = scopeEl.startViewTransition(() => updateDOM());
-  transition.ready.catch(() => {});
+  transition.ready.catch(() => { });
 }
 
 /* ==========================================================================
@@ -63,7 +63,7 @@ function setStoredScheme(value) {
     } else {
       localStorage.removeItem("color-scheme");
     }
-  } catch {}
+  } catch { }
   applyScheme(value === "light" || value === "dark" ? value : null);
 }
 
@@ -80,7 +80,7 @@ function applyPreset(preset) {
   document.documentElement.dataset.theme = safe;
   try {
     localStorage.setItem("accent-preset", safe);
-  } catch {}
+  } catch { }
   for (const btn of presetButtons) {
     btn.setAttribute("aria-pressed", String(btn.dataset.preset === safe));
   }
@@ -91,7 +91,7 @@ function applyGrid(enabled) {
   if (gridToggle) gridToggle.checked = enabled;
   try {
     localStorage.setItem("canvas-texture", enabled ? "on" : "off");
-  } catch {}
+  } catch { }
 }
 
 quickToggleBtn?.addEventListener("click", toggleComfortScheme);
@@ -591,9 +591,21 @@ if (!isLiveUpiConfigured && !isLiveRazorpayConfigured && !razorpayApiBase) {
   upiIdValueEl.textContent = isLiveUpiConfigured ? SITE_CONFIG.upiId.trim() : "Via Razorpay below";
 }
 
-if (razorpayApiBase && razorpayCheckoutBtn) {
-  razorpayCheckoutBtn.hidden = false;
+async function syncBackendCapabilities() {
+  if (!razorpayApiBase || !razorpayCheckoutBtn) return;
+  try {
+    const res = await fetch(`${razorpayApiBase}/health`, {
+      signal: AbortSignal.timeout ? AbortSignal.timeout(3500) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.configured) {
+      razorpayCheckoutBtn.hidden = false;
+    }
+  } catch {
+    // Backend unavailable or TLS not yet active — keep UPI QR and Razorpay.me handle active
+  }
 }
+syncBackendCapabilities();
 
 if (isLiveRazorpayConfigured) {
   razorpayLinkEl.href = SITE_CONFIG.razorpayPaymentLink.trim();
@@ -1104,7 +1116,7 @@ function saveBooking(booking) {
   const list = [booking, ...getSavedBookings()].slice(0, 5);
   try {
     localStorage.setItem("ag_session_bookings", JSON.stringify(list));
-  } catch {}
+  } catch { }
   renderSavedBookings();
 }
 
