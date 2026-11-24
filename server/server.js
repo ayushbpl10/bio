@@ -3,6 +3,7 @@ import http from "node:http";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import Razorpay from "razorpay";
+import { isValidTuesdayDate, processBookingActions } from "./notifications.js";
 import { handleCreateOrder, handleVerifyPayment } from "./razorpay-handlers.js";
 
 function getConfigFromEnv(env = process.env) {
@@ -22,6 +23,7 @@ function getConfigFromEnv(env = process.env) {
     keySecret,
     allowedOrigins,
     razorpayClient: client,
+    env,
   };
 }
 
@@ -47,20 +49,25 @@ function sendJson(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
-function readJsonBody(req, limitBytes = 32768) {
+export function readJsonBody(req, limitBytes = 32768) {
   return new Promise((resolve, reject) => {
     let size = 0;
+    let settled = false;
     const chunks = [];
     req.on("data", (chunk) => {
+      if (settled) return;
       size += chunk.length;
       if (size > limitBytes) {
+        settled = true;
+        req.pause();
         reject(new Error("BODY_TOO_LARGE"));
-        req.destroy();
         return;
       }
       chunks.push(chunk);
     });
     req.on("end", () => {
+      if (settled) return;
+      settled = true;
       if (chunks.length === 0) {
         resolve({});
         return;
@@ -71,7 +78,11 @@ function readJsonBody(req, limitBytes = 32768) {
         reject(new Error("INVALID_JSON"));
       }
     });
-    req.on("error", reject);
+    req.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
   });
 }
 
@@ -107,6 +118,7 @@ export function createAppServer(overrides = {}) {
       body = await readJsonBody(req);
     } catch (err) {
       const code = err.message === "BODY_TOO_LARGE" ? 413 : 400;
+      if (code === 413) res.setHeader("Connection", "close");
       sendJson(res, code, { error: err.message });
       return;
     }
@@ -123,7 +135,38 @@ export function createAppServer(overrides = {}) {
 
     if (url.pathname === "/api/verify-payment") {
       const result = handleVerifyPayment({ body, keySecret: cfg.keySecret });
+      if (result.status === 200 && body?.booking && isValidTuesdayDate(body.booking.dateStr)) {
+        const bookingActions = await processBookingActions({
+          booking: {
+            ...body.booking,
+            utr: body.razorpay_payment_id || body.booking.utr || "",
+          },
+          env: cfg.env,
+          fetchImpl: cfg.fetchImpl,
+          createTransportImpl: cfg.createTransportImpl,
+        });
+        sendJson(res, 200, { ...result.payload, ...bookingActions });
+        return;
+      }
       sendJson(res, result.status, result.payload);
+      return;
+    }
+
+    if (url.pathname === "/api/book-session") {
+      const booking = body?.booking || body;
+      if (!booking?.name || !booking?.email || !isValidTuesdayDate(booking?.dateStr)) {
+        sendJson(res, 400, {
+          error: "Valid guest name, email, and Tuesday session date (YYYY-MM-DD) are required.",
+        });
+        return;
+      }
+      const bookingActions = await processBookingActions({
+        booking,
+        env: cfg.env,
+        fetchImpl: cfg.fetchImpl,
+        createTransportImpl: cfg.createTransportImpl,
+      });
+      sendJson(res, 200, { ok: true, ...bookingActions });
       return;
     }
 
@@ -131,11 +174,15 @@ export function createAppServer(overrides = {}) {
   });
 }
 
-const entryHref = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : "";
-if (import.meta.url === entryHref) {
-  const cfg = getConfigFromEnv();
+export function startServer(env = process.env) {
+  const cfg = getConfigFromEnv(env);
   const server = createAppServer(cfg);
-  server.listen(cfg.port, cfg.host, () => {
+  return server.listen(cfg.port, cfg.host, () => {
     console.log(`bio-razorpay-backend listening on http://${cfg.host}:${cfg.port}`);
   });
+}
+
+const entryHref = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : "";
+if (import.meta.url === entryHref) {
+  startServer();
 }

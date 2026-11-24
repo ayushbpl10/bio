@@ -323,19 +323,19 @@
                   <div class="topic-grid" id="topic-options"></div>
                 </fieldset>
 
-                <!-- Step 2: Date & Slot -->
+                <!-- Step 2: Date & Slot (Every Tuesday 6:00 PM IST) -->
                 <fieldset class="form-fieldset">
-                  <legend><span class="step-badge" aria-hidden="true">2</span> Pick Date &amp; Time (<span id="tz-badge">IST</span>) <span aria-hidden="true">*</span></legend>
-                  <p class="field-hint">Upcoming 14 days in Asia/Kolkata (IST), automatically converted to your local clock.</p>
-                  <div class="date-strip" id="date-strip" role="group" aria-label="Quick date selection"></div>
+                  <legend><span class="step-badge" aria-hidden="true">2</span> Pick a Tuesday &amp; Confirm Slot (<span id="tz-badge">IST</span>) <span aria-hidden="true">*</span></legend>
+                  <p class="field-hint">1:1 sessions run <strong>every Tuesday at 6:00 PM – 7:00 PM IST</strong>, converted live to your local timezone.</p>
+                  <div class="date-strip" id="date-strip" role="group" aria-label="Upcoming Tuesday dates"></div>
 
                   <div class="date-slot-row">
                     <div class="field">
-                      <label for="session-date">Selected Date <span aria-hidden="true">*</span></label>
-                      <span id="date-hint" class="hint">Format: YYYY-MM-DD</span>
+                      <label for="session-date">Selected Tuesday <span aria-hidden="true">*</span></label>
+                      <span id="date-hint" class="hint">Tuesdays only (YYYY-MM-DD)</span>
                       <input type="date" id="session-date" name="sessionDate" required aria-describedby="date-hint" data-error="date-error">
                       <div id="date-error" class="error-msg">
-                        <span role="img" aria-label="Error">⚠</span> Please choose a date from today onward.
+                        <span role="img" aria-label="Error">⚠</span> Sessions are available on upcoming Tuesdays only (6:00 PM IST).
                       </div>
                     </div>
 
@@ -346,10 +346,10 @@
                   </div>
 
                   <div class="slots-wrap">
-                    <p class="sub-legend" id="slots-label">Available 1-Hour Slots <span aria-hidden="true">*</span></p>
+                    <p class="sub-legend" id="slots-label">Tuesday Session Slot (6:00 PM IST) <span aria-hidden="true">*</span></p>
                     <div class="slots-grid" id="slots-grid" role="radiogroup" aria-labelledby="slots-label"></div>
                     <div id="slot-error" class="error-msg" hidden>
-                      <span role="img" aria-label="Error">⚠</span> Please select an available 1-hour time slot.
+                      <span role="img" aria-label="Error">⚠</span> Please select an upcoming Tuesday to activate the 6:00 PM IST slot.
                     </div>
                   </div>
                 </fieldset>
@@ -406,10 +406,10 @@
 
                   <div class="field">
                     <label for="upi-utr">Payment Reference / UTR ID (optional before paying)</label>
-                    <span id="utr-hint" class="hint">12-digit UPI UTR or Razorpay Payment ID (6–24 letters/digits, e.g. 412345678901).</span>
-                    <input type="text" id="upi-utr" name="upiUtr" inputmode="numeric" pattern="[A-Za-z0-9]{6,24}" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="done" aria-describedby="utr-hint" data-error="utr-error">
+                    <span id="utr-hint" class="hint">12-digit UPI UTR or Razorpay Payment ID (e.g. 412345678901 or pay_... ).</span>
+                    <input type="text" id="upi-utr" name="upiUtr" inputmode="text" pattern="[A-Za-z0-9_-]{6,32}" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="done" aria-describedby="utr-hint" data-error="utr-error">
                     <div id="utr-error" class="error-msg">
-                      <span role="img" aria-label="Error">⚠</span> Reference ID should be 6–24 letters or digits without spaces.
+                      <span role="img" aria-label="Error">⚠</span> Reference ID should be 6–32 letters, numbers, underscores, or hyphens.
                     </div>
                   </div>
 
@@ -524,7 +524,7 @@
           Download Calendar Invite (.ics)
         </button>
         <a class="pill-btn pill-outline" id="gcal-link-btn" href="#" target="_blank" rel="noopener noreferrer">
-          Add to Google Calendar ↗
+          Schedule Google Meet Invite ↗
         </a>
         <span class="copy">
           <button type="button" class="pill-btn pill-ghost copy-button-text" command="--copy" commandfor="dialog-pass-summary" aria-label="Copy booking summary">
@@ -533,7 +533,7 @@
           <span class="tip" role="status"></span>
         </span>
         <a class="pill-btn pill-ghost" id="send-confirm-btn" href="#" target="_blank" rel="noopener noreferrer">
-          Confirm on LinkedIn ↗
+          Email Confirmation to ayushbpl10@gmail.com ↗
         </a>
       </div>
 

@@ -600,20 +600,30 @@ if (isLiveRazorpayConfigured) {
   razorpayLinkEl.hidden = false;
 }
 
-function getIstDateString(dateObj) {
-  return new Intl.DateTimeFormat("en-CA", {
+function getIstNowParts() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(dateObj);
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+  return {
+    dateStr: `${map.year}-${map.month}-${map.day}`,
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+  };
 }
 
 function getIstWeekday(dateStr) {
   const dt = new Date(`${dateStr}T12:00:00+05:30`);
   const day = dt.getUTCDay();
   return {
-    isWeekend: day === 0 || day === 6,
+    dayOfWeek: day,
+    isTuesday: day === 2,
     dayShort: new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "Asia/Kolkata" }).format(dt),
     dayNum: new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }).format(dt),
     fullLabel: new Intl.DateTimeFormat("en-US", {
@@ -626,11 +636,30 @@ function getIstWeekday(dateStr) {
   };
 }
 
+function getUpcomingTuesdays(count = 8) {
+  const nowIst = getIstNowParts();
+  const baseUtc = new Date(`${nowIst.dateStr}T12:00:00Z`);
+  let daysUntilTue = (2 - baseUtc.getUTCDay() + 7) % 7;
+  // If today is Tuesday and 6 PM IST is less than 1 hour away or already passed, jump to next Tuesday
+  if (daysUntilTue === 0 && (nowIst.hour > 17 || (nowIst.hour === 17 && nowIst.minute > 0))) {
+    daysUntilTue = 7;
+  }
+  const results = [];
+  for (let i = 0; i < count; i++) {
+    const dt = new Date(baseUtc.getTime());
+    dt.setUTCDate(baseUtc.getUTCDate() + daysUntilTue + i * 7);
+    const str = dt.toISOString().slice(0, 10);
+    results.push({ str, ...getIstWeekday(str) });
+  }
+  return results;
+}
+
 function formatVisitorLocalSlot(dateStr, slot) {
   const start = new Date(`${dateStr}T${String(slot.hour).padStart(2, "0")}:${String(slot.minute).padStart(2, "0")}:00+05:30`);
   const end = new Date(start.getTime() + SITE_CONFIG.sessionDurationMins * 60000);
-  if (visitorTz === "Asia/Kolkata") return "60 min · IST";
+  if (visitorTz === "Asia/Kolkata") return "Every Tuesday · 60 min · IST";
   const fmt = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
     hour: "numeric",
     minute: "2-digit",
     timeZone: visitorTz,
@@ -663,16 +692,30 @@ PROFILE.sessionTopics.forEach((topic, idx) => {
   topicOptionsEl.append(label);
 });
 
-const todayIst = getIstDateString(new Date());
-dateInput.min = todayIst;
-const upcomingDates = [];
-for (let i = 1; i <= 14; i++) {
-  const d = new Date(Date.now() + i * 86400000);
-  const str = getIstDateString(d);
-  const info = getIstWeekday(str);
-  upcomingDates.push({ str, ...info });
+const upcomingDates = getUpcomingTuesdays(8);
+const firstAvailableTuesday = upcomingDates[0].str;
+dateInput.min = firstAvailableTuesday;
+dateInput.step = "7";
+dateInput.value = firstAvailableTuesday;
+
+function isValidSessionTuesday(dateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  if (dateStr < firstAvailableTuesday) return false;
+  return getIstWeekday(dateStr).isTuesday;
 }
-dateInput.value = upcomingDates[0].str;
+
+function validateDateInputRule() {
+  if (!dateInput.value) {
+    dateInput.setCustomValidity("");
+    return false;
+  }
+  if (!isValidSessionTuesday(dateInput.value)) {
+    dateInput.setCustomValidity("Sessions are available on upcoming Tuesdays only (6:00 PM IST).");
+    return false;
+  }
+  dateInput.setCustomValidity("");
+  return true;
+}
 
 function renderDateStrip() {
   dateStripEl.innerHTML = "";
@@ -683,13 +726,14 @@ function renderDateStrip() {
     btn.setAttribute("aria-pressed", String(dateInput.value === d.str));
     const daySpan = document.createElement("span");
     daySpan.className = "date-chip-day";
-    daySpan.textContent = d.dayShort;
+    daySpan.textContent = `${d.dayShort} · 6 PM`;
     const numSpan = document.createElement("span");
     numSpan.className = "date-chip-num";
     numSpan.textContent = d.dayNum;
     btn.append(daySpan, numSpan);
     btn.addEventListener("click", () => {
       dateInput.value = d.str;
+      validateDateInputRule();
       dateInput.dispatchEvent(new Event("change", { bubbles: true }));
     });
     dateStripEl.append(btn);
@@ -698,9 +742,14 @@ function renderDateStrip() {
 
 function renderSlotsForDate(dateStr) {
   slotsGridEl.innerHTML = "";
-  if (!dateStr) return;
-  const { isWeekend } = getIstWeekday(dateStr);
-  const list = isWeekend ? PROFILE.timeSlots.weekend : PROFILE.timeSlots.weekday;
+  if (!isValidSessionTuesday(dateStr)) {
+    const notice = document.createElement("p");
+    notice.className = "field-hint";
+    notice.textContent = "No session slots on non-Tuesdays — choose any upcoming Tuesday above for the 6:00 PM IST slot.";
+    slotsGridEl.append(notice);
+    return;
+  }
+  const list = PROFILE.timeSlots.slots;
   list.forEach((slot, idx) => {
     const label = document.createElement("label");
     label.className = "slot-radio";
@@ -736,9 +785,8 @@ function getSelectedTopic() {
 
 function getSelectedSlot() {
   const dateStr = dateInput.value;
-  if (!dateStr) return null;
-  const { isWeekend } = getIstWeekday(dateStr);
-  const list = isWeekend ? PROFILE.timeSlots.weekend : PROFILE.timeSlots.weekday;
+  if (!isValidSessionTuesday(dateStr)) return null;
+  const list = PROFILE.timeSlots.slots;
   const checked = bookingForm.querySelector('input[name="timeSlot"]:checked');
   return list.find((s) => s.id === checked?.value) || null;
 }
@@ -765,7 +813,7 @@ function updateCheckoutSummary() {
     const info = getIstWeekday(dateStr);
     summaryDatetimeEl.textContent = `${info.fullLabel} · ${slot.label}`;
   } else {
-    summaryDatetimeEl.textContent = "Select a date & slot";
+    summaryDatetimeEl.textContent = "Select a Tuesday (6:00 PM IST)";
   }
 
   const upiNote = `1hr Session: ${topic.id} ${dateStr || ""}`.trim();
@@ -777,12 +825,16 @@ function updateCheckoutSummary() {
   );
 }
 
+dateInput.addEventListener("input", validateDateInputRule);
 dateInput.addEventListener("change", () => {
+  validateDateInputRule();
   renderDateStrip();
   renderSlotsForDate(dateInput.value);
   updateCheckoutSummary();
+  slotErrorEl.hidden = Boolean(getSelectedSlot());
 });
 
+validateDateInputRule();
 renderDateStrip();
 renderSlotsForDate(dateInput.value);
 updateCheckoutSummary();
@@ -879,6 +931,7 @@ bookingForm.addEventListener(
 
 bookingForm.addEventListener("input", (e) => {
   const el = e.target;
+  if (razorpayErrorEl && !razorpayErrorEl.hidden) showRazorpayError("");
   if (!supportsUserInvalid && el.checkValidity) {
     const st = fallbackDirty.get(el) || { hasInteracted: false, hasBlurred: false };
     st.hasInteracted = true;
@@ -961,33 +1014,45 @@ function formatIcsUtc(dateObj) {
 function buildIcsContent(booking) {
   const start = new Date(booking.startIso);
   const end = new Date(booking.endIso);
+  const location = booking.meetUrl || SITE_CONFIG.meetingLink || SITE_CONFIG.meetingPlatform;
+  const hostEmail = SITE_CONFIG.contactEmail || "ayushbpl10@gmail.com";
   const desc = [
     `1:1 Session with ${SITE_CONFIG.ownerName}`,
     `Booking ID: ${booking.id}`,
     `Topic: ${booking.topicTitle}`,
     `Fee: ₹${SITE_CONFIG.sessionFeeInr} INR`,
     booking.utr ? `Payment Ref / UTR: ${booking.utr}` : "Payment Ref / UTR: Pending verification",
+    booking.meetUrl ? `Google Meet: ${booking.meetUrl}` : "",
     `Agenda: ${booking.agenda.replace(/\r?\n/g, " ")}`,
-    `Platform: ${SITE_CONFIG.meetingPlatform}`,
-  ].join("\\n");
+    `Location: ${location}`,
+  ]
+    .filter(Boolean)
+    .join("\\n");
 
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Ayush Gupta//1on1 Session//EN",
     "CALSCALE:GREGORIAN",
+    "METHOD:REQUEST",
     "BEGIN:VEVENT",
     `UID:${booking.id}@ayushbpl10.github.io`,
     `DTSTAMP:${formatIcsUtc(new Date())}`,
     `DTSTART:${formatIcsUtc(start)}`,
     `DTEND:${formatIcsUtc(end)}`,
+    `ORGANIZER;CN=${SITE_CONFIG.ownerName}:mailto:${hostEmail}`,
+    `ATTENDEE;CN=${SITE_CONFIG.ownerName};RSVP=TRUE:mailto:${hostEmail}`,
+    `ATTENDEE;CN=${booking.name};RSVP=TRUE:mailto:${booking.email}`,
     `SUMMARY:1:1 Session with ${SITE_CONFIG.ownerName} (${booking.topicTitle})`,
     `DESCRIPTION:${desc}`,
-    `LOCATION:${SITE_CONFIG.meetingPlatform}`,
+    `LOCATION:${location}`,
+    booking.meetUrl ? `URL:${booking.meetUrl}` : "",
     "STATUS:CONFIRMED",
     "END:VEVENT",
     "END:VCALENDAR",
-  ].join("\r\n");
+  ]
+    .filter(Boolean)
+    .join("\r\n");
 }
 
 function downloadIcs(booking) {
@@ -1005,13 +1070,25 @@ function downloadIcs(booking) {
 function buildGcalUrl(booking) {
   const start = formatIcsUtc(new Date(booking.startIso));
   const end = formatIcsUtc(new Date(booking.endIso));
+  const location = booking.meetUrl || SITE_CONFIG.meetingLink || "Google Meet";
   const params = new URLSearchParams({
     action: "TEMPLATE",
     text: `1:1 Session with ${SITE_CONFIG.ownerName} — ${booking.topicTitle}`,
     dates: `${start}/${end}`,
-    details: `Booking ID: ${booking.id}\nFee: ₹${SITE_CONFIG.sessionFeeInr} INR\nUTR / Payment ID: ${booking.utr || "Pending"}\nAgenda: ${booking.agenda}`,
-    location: SITE_CONFIG.meetingPlatform,
+    ctz: "Asia/Kolkata",
+    details: [
+      `Booking ID: ${booking.id}`,
+      `Guest: ${booking.name} (${booking.email})`,
+      `Fee: ₹${SITE_CONFIG.sessionFeeInr} INR`,
+      `Payment Ref / UTR: ${booking.utr || "Pending"}`,
+      booking.meetUrl ? `Google Meet: ${booking.meetUrl}` : "Turn on 'Add Google Meet video conferencing' when saving.",
+      `Agenda: ${booking.agenda}`,
+    ].join("\n"),
+    location,
   });
+  if (SITE_CONFIG.contactEmail) {
+    params.set("add", SITE_CONFIG.contactEmail);
+  }
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
@@ -1036,33 +1113,50 @@ function openBookingDialog(booking) {
   dialogSubtitle.textContent = `Booking ${booking.id} · ${booking.dateLabel} · ${booking.slotLabel}`;
   dialogPassSummary.innerHTML = "";
 
+  const effectiveMeetUrl = booking.meetUrl || SITE_CONFIG.meetingLink || "";
   const rows = [
     ["Booking ID", booking.id],
     ["Attendee", `${booking.name} (${booking.email})`],
     ["Topic", booking.topicTitle],
-    ["When (IST)", `${booking.dateLabel} · ${booking.slotLabel}`],
+    ["When (IST)", `${booking.dateLabel} · ${booking.slotLabel} (Tuesday)`],
     ["Duration & Fee", `60 Minutes · ₹${SITE_CONFIG.sessionFeeInr} INR`],
     ["Payment Ref (UTR)", booking.utr || "Pending / Pay via UPI QR or Razorpay"],
+    ["Google Meet", effectiveMeetUrl || "Click 'Schedule Google Meet Invite ↗' below to generate & invite Ayush"],
+    [
+      "Email Alert",
+      booking.emailSent
+        ? `Sent to ${SITE_CONFIG.contactEmail || "ayushbpl10@gmail.com"} & ${booking.email}`
+        : `Click 'Email Confirmation to ${SITE_CONFIG.contactEmail || "ayushbpl10@gmail.com"} ↗' below`,
+    ],
     ["Agenda", booking.agenda],
   ];
   for (const [k, v] of rows) {
     const line = document.createElement("div");
     const strong = document.createElement("strong");
     strong.textContent = `${k}: `;
-    const val = document.createElement("span");
-    val.textContent = v;
-    line.append(strong, val);
+    if (k === "Google Meet" && /^https:\/\/meet\.google\.com\//i.test(v)) {
+      const a = document.createElement("a");
+      a.href = v;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = v;
+      line.append(strong, a);
+    } else {
+      const val = document.createElement("span");
+      val.textContent = v;
+      line.append(strong, val);
+    }
     dialogPassSummary.append(line);
   }
 
   gcalLinkBtn.href = buildGcalUrl(booking);
   if (SITE_CONFIG.contactEmail) {
     const mailParams = new URLSearchParams({
-      subject: `[1:1 Session Booking ${booking.id}] ${booking.topicTitle}`,
-      body: `Hi Ayush,\n\nI booked a 1-hour session (₹500 INR).\nBooking ID: ${booking.id}\nDate & Time: ${booking.dateLabel} (${booking.slotLabel})\nUTR / Payment ID: ${booking.utr || "Attaching screenshot"}\nAgenda: ${booking.agenda}\n\nThanks,\n${booking.name}`,
+      subject: `[1:1 Tuesday Session ${booking.id}] ${booking.dateLabel} 6 PM IST — ${booking.topicTitle}`,
+      body: `Hi Ayush,\n\nI booked a Tuesday 6:00 PM IST 1-hour session (₹500 INR).\nBooking ID: ${booking.id}\nDate & Time: ${booking.dateLabel} (${booking.slotLabel})\nPayment Ref / UTR: ${booking.utr || "Attaching receipt"}\n${effectiveMeetUrl ? `Google Meet: ${effectiveMeetUrl}\n` : ""}Agenda: ${booking.agenda}\n\nThanks,\n${booking.name} (${booking.email})`,
     });
     sendConfirmBtn.href = `mailto:${SITE_CONFIG.contactEmail}?${mailParams.toString()}`;
-    sendConfirmBtn.textContent = "Email Confirmation ↗";
+    sendConfirmBtn.textContent = `Email Confirmation to ${SITE_CONFIG.contactEmail} ↗`;
   } else {
     sendConfirmBtn.href = SITE_CONFIG.linkedinUrl;
     sendConfirmBtn.textContent = "Share Booking ID on LinkedIn ↗";
@@ -1099,8 +1193,16 @@ function validateBookingInputs() {
   const slot = getSelectedSlot();
   slotErrorEl.hidden = Boolean(slot);
   if (!bookingForm.checkValidity() || !slot) {
-    const firstInvalid = bookingForm.querySelector(":invalid");
-    firstInvalid?.focus();
+    const firstInvalid = bookingForm.querySelector("input:invalid, select:invalid, textarea:invalid");
+    if (firstInvalid) {
+      const label = firstInvalid.labels?.[0]?.textContent?.replace(/\*$/, "").trim() || "highlighted field";
+      showRazorpayError(`Please check "${label}" above before continuing.`);
+      firstInvalid.focus();
+      firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+    } else if (!slot) {
+      showRazorpayError("Please select an upcoming Tuesday to activate the 6:00 PM IST slot.");
+      dateInput.focus();
+    }
     return null;
   }
   return slot;
@@ -1219,8 +1321,10 @@ async function startRazorpayCheckout() {
         },
       },
       handler: async (paymentResp) => {
-        setCheckoutBusy(true, "Verifying payment signature…");
+        setCheckoutBusy(true, "Verifying payment & scheduling Google Meet…");
         try {
+          const verifiedRef = `${paymentResp.razorpay_payment_id} (Razorpay Verified)`;
+          const pendingBooking = buildBookingFromForm(slot, verifiedRef);
           const verifyRes = await fetch(`${razorpayApiBase}/api/verify-payment`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1228,6 +1332,7 @@ async function startRazorpayCheckout() {
               razorpay_order_id: paymentResp.razorpay_order_id,
               razorpay_payment_id: paymentResp.razorpay_payment_id,
               razorpay_signature: paymentResp.razorpay_signature,
+              booking: pendingBooking,
             }),
           });
           const verifyData = await verifyRes.json().catch(() => ({}));
@@ -1235,12 +1340,15 @@ async function startRazorpayCheckout() {
             throw new Error(verifyData.error || "Payment verification failed.");
           }
 
-          const verifiedRef = `${paymentResp.razorpay_payment_id} (Razorpay Verified)`;
           const utrInput = document.getElementById("upi-utr");
           if (utrInput) utrInput.value = paymentResp.razorpay_payment_id;
-          const booking = buildBookingFromForm(slot, verifiedRef);
-          saveBooking(booking);
-          openBookingDialog(booking);
+          const confirmedBooking = {
+            ...pendingBooking,
+            meetUrl: verifyData.meet_url || SITE_CONFIG.meetingLink || "",
+            emailSent: Boolean(verifyData.email_sent),
+          };
+          saveBooking(confirmedBooking);
+          openBookingDialog(confirmedBooking);
           showRazorpayError("");
         } catch (verifyErr) {
           showRazorpayError(
@@ -1268,13 +1376,33 @@ async function startRazorpayCheckout() {
 
 razorpayCheckoutBtn?.addEventListener("click", startRazorpayCheckout);
 
-bookingForm.addEventListener("submit", (e) => {
+bookingForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   showRazorpayError("");
   const slot = validateBookingInputs();
   if (!slot) return;
 
   const booking = buildBookingFromForm(slot);
+  if (razorpayApiBase) {
+    const confirmBtn = document.getElementById("confirm-booking-btn");
+    confirmBtn?.setAttribute("aria-busy", "true");
+    try {
+      const res = await fetch(`${razorpayApiBase}/api/book-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        booking.meetUrl = data.meet_url || SITE_CONFIG.meetingLink || "";
+        booking.emailSent = Boolean(data.email_sent);
+      }
+    } catch {
+      // Fall back gracefully to calendar invite & mailto links inside dialog
+    } finally {
+      confirmBtn?.removeAttribute("aria-busy");
+    }
+  }
   saveBooking(booking);
   openBookingDialog(booking);
 });

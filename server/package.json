@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Zero-cost Razorpay Standard Checkout order creation & HMAC signature verification server for Ayush Gupta's 1:1 session booking.",
+  "description": "Zero-cost Razorpay Standard Checkout, Gmail booking emailer, and Google Calendar Meet scheduler for Ayush Gupta's Tuesday 6 PM IST 1:1 sessions.",
   "scripts": {
     "start": "node server.js",
     "test": "node --test test.mjs"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
+    "nodemailer": "^6.9.16",
     "razorpay": "^2.9.6"
   }
 }

@@ -308,19 +308,11 @@ export const PROFILE = {
       subtitle: "Multi-tenant IAM, third-party SaaS webhooks, PostgreSQL optimization",
     },
   ],
-  // Time slots in Asia/Kolkata (IST). Hour & minute are 24h IST.
+  // Time slots in Asia/Kolkata (IST). Hour & minute are 24h IST (Tuesdays only, 6:00 PM IST).
   timeSlots: {
-    weekday: [
-      { id: "19:30", hour: 19, minute: 30, label: "7:30 PM – 8:30 PM IST" },
-      { id: "20:45", hour: 20, minute: 45, label: "8:45 PM – 9:45 PM IST" },
-      { id: "21:45", hour: 21, minute: 45, label: "9:45 PM – 10:45 PM IST" },
-    ],
-    weekend: [
-      { id: "10:30", hour: 10, minute: 30, label: "10:30 AM – 11:30 AM IST" },
-      { id: "12:00", hour: 12, minute: 0, label: "12:00 PM – 1:00 PM IST" },
-      { id: "16:00", hour: 16, minute: 0, label: "4:00 PM – 5:00 PM IST" },
-      { id: "19:30", hour: 19, minute: 30, label: "7:30 PM – 8:30 PM IST" },
-      { id: "21:00", hour: 21, minute: 0, label: "9:00 PM – 10:00 PM IST" },
+    tuesdayOnly: true,
+    slots: [
+      { id: "18:00", hour: 18, minute: 0, label: "6:00 PM – 7:00 PM IST" },
     ],
   },
 };

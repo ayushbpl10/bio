@@ -24,12 +24,15 @@ export const SITE_CONFIG = {
   razorpayPaymentLink: "https://razorpay.me/@ayushgupta3781",
 
   // Optional: HTTPS backend URL running server/server.js (e.g. "https://api.yourdomain.com")
-  // Enables the in-page Razorpay Standard Checkout modal (/api/create-order + /api/verify-payment).
+  // Enables Razorpay Standard Checkout, automatic email to ayushbpl10@gmail.com, and live Google Meet creation.
   razorpayApiBaseUrl: "",
 
-  // Optional: Personal email for pre-filled booking confirmation emails (never exposes work email).
-  contactEmail: "",
+  // Booking notification email (receives booking details & calendar invitations)
+  contactEmail: "ayushbpl10@gmail.com",
 
-  // Meet / Call platform label shown in generated calendar invites
-  meetingPlatform: "Google Meet / Video Call (link shared upon confirmation)",
+  // Optional: Fixed reusable Google Meet link (created at meet.google.com) if not using Calendar OAuth on backend
+  meetingLink: "",
+
+  // Meet / Call platform label shown in generated calendar invites when no live Meet link is attached yet
+  meetingPlatform: "Google Meet (invite sent with confirmation)",
 };
