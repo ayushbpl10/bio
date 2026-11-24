@@ -6,8 +6,11 @@ import { PassThrough } from "node:stream";
 import test from "node:test";
 import {
   createGoogleMeetEvent,
+  isValidEmail,
   isValidTuesdayDate,
   processBookingActions,
+  sanitizeBookingInput,
+  sanitizeHttpUrl,
   sendBookingNotificationEmail,
 } from "./notifications.js";
 import { handleCreateOrder, handleVerifyPayment } from "./razorpay-handlers.js";
@@ -575,13 +578,91 @@ test("HTTP server covers CORS, OPTIONS, 405, 404, bad JSON, 413, create-order, v
     assert.equal(tueJson.meet_url, "https://meet.google.com/http-meet-url");
     assert.equal(emailsSent.length, 2);
 
-    const healthJson = await (await fetch(`${baseUrl}/health`)).json();
+    const healthRes = await fetch(`${baseUrl}/health`);
+    assert.equal(healthRes.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(healthRes.headers.get("x-frame-options"), "DENY");
+    assert.equal(healthRes.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(healthRes.headers.get("cache-control"), "no-store");
+    const healthJson = await healthRes.json();
     assert.equal(healthJson.ok, true);
     assert.equal(healthJson.configured, true);
     assert.equal(healthJson.email_configured, true);
     assert.equal(healthJson.meet_configured, true);
   } finally {
     await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Security hardening sanitizes inputs, rejects bad emails/XSS URLs, and rate-limits API abuse", async () => {
+  assert.equal(isValidEmail("guest@example.com"), true);
+  assert.equal(isValidEmail("bad\r\nheader@example.com"), false);
+  assert.equal(isValidEmail("not-an-email"), false);
+  assert.equal(sanitizeHttpUrl(""), "");
+  assert.equal(sanitizeHttpUrl("javascript:alert(1)"), "");
+  assert.equal(sanitizeHttpUrl("ftp://example.com"), "");
+  assert.equal(sanitizeHttpUrl("not a url"), "");
+  assert.equal(sanitizeHttpUrl("https://linkedin.com/in/test"), "https://linkedin.com/in/test");
+
+  const sanitized = sanitizeBookingInput({
+    id: "AG-1\r\nX-Injected: bad",
+    name: "Alice\nBob",
+    email: "alice@example.com",
+    dateStr: "2026-12-01",
+    profile: "javascript:alert(1)",
+    agenda: "Line 1\nLine 2",
+  });
+  assert.equal(sanitized.id, "AG-1 X-Injected: bad");
+  assert.equal(sanitized.name, "Alice Bob");
+  assert.equal(sanitized.profile, "");
+  assert.equal(sanitized.agenda, "Line 1\nLine 2");
+
+  const limitedServer = createAppServer({
+    keyId: "",
+    keySecret: "",
+    rateLimitWindowMs: 60_000,
+    rateLimitMax: 2,
+    rateLimitMaxBuckets: 1,
+    allowedOrigins: new Set([]),
+  });
+  await new Promise((r) => limitedServer.listen(0, "127.0.0.1", r));
+  const { port } = limitedServer.address();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  try {
+    const badEmail = await fetch(`${baseUrl}/api/book-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.9, 10.0.0.1" },
+      body: JSON.stringify({ name: "Bob", email: "invalid-email", dateStr: "2026-12-01" }),
+    });
+    assert.equal(badEmail.status, 400);
+
+    const secondHit = await fetch(`${baseUrl}/api/book-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.9" },
+      body: JSON.stringify({ name: "Bob", email: "invalid-email", dateStr: "2026-12-01" }),
+    });
+    assert.equal(secondHit.status, 400);
+
+    const thirdHit = await fetch(`${baseUrl}/api/book-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.9" },
+      body: JSON.stringify({ name: "Bob", email: "bob@example.com", dateStr: "2026-12-01" }),
+    });
+    assert.equal(thirdHit.status, 429);
+    assert.ok(Number(thirdHit.headers.get("retry-after")) >= 1);
+
+    // Distinct IPs trigger bounded rate-limiter map pruning (maxBuckets=1 -> second IP hits, third clears map)
+    await fetch(`${baseUrl}/api/book-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.10" },
+      body: JSON.stringify({ name: "Bob", email: "invalid-email", dateStr: "2026-12-01" }),
+    });
+    await fetch(`${baseUrl}/api/book-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.11" },
+      body: JSON.stringify({ name: "Bob", email: "invalid-email", dateStr: "2026-12-01" }),
+    });
+  } finally {
+    await new Promise((r) => limitedServer.close(r));
   }
 });
 

@@ -60,7 +60,14 @@ STATIC_MEET_URL=${STATIC_MEET_URL:-}
 EOF
 chmod 600 "${APP_DIR}/repo/server/.env"
 
-echo "==> Installing systemd service (bio-razorpay-api)..."
+echo "==> Installing hardened systemd service (bio-razorpay-api)..."
+if ! id -u bioapi >/dev/null 2>&1; then
+  sudo useradd --system --no-create-home --shell /usr/sbin/nologin bioapi
+fi
+sudo chmod -R a+rX "${APP_DIR}/repo"
+sudo chmod 600 "${APP_DIR}/repo/server/.env"
+sudo chown bioapi:bioapi "${APP_DIR}/repo/server/.env"
+
 sudo tee /etc/systemd/system/bio-razorpay-api.service >/dev/null <<EOF
 [Unit]
 Description=Ayush Bio Razorpay Standard Checkout API
@@ -69,11 +76,15 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=${USER}
+User=bioapi
 WorkingDirectory=${APP_DIR}/repo/server
 ExecStart=$(command -v node) server.js
 Restart=on-failure
 RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target

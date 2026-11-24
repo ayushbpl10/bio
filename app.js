@@ -1023,19 +1023,29 @@ function formatIcsUtc(dateObj) {
   return dateObj.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
 
+function stripCrlf(val) {
+  return String(val ?? "").replace(/[\r\n\u0000-\u001f]+/g, " ").trim();
+}
+
 function buildIcsContent(booking) {
   const start = new Date(booking.startIso);
   const end = new Date(booking.endIso);
-  const location = booking.meetUrl || SITE_CONFIG.meetingLink || SITE_CONFIG.meetingPlatform;
-  const hostEmail = SITE_CONFIG.contactEmail || "ayushbpl10@gmail.com";
+  const location = stripCrlf(booking.meetUrl || SITE_CONFIG.meetingLink || SITE_CONFIG.meetingPlatform);
+  const hostEmail = stripCrlf(SITE_CONFIG.contactEmail || "ayushbpl10@gmail.com");
+  const guestName = stripCrlf(booking.name);
+  const guestEmail = stripCrlf(booking.email);
+  const topicTitle = stripCrlf(booking.topicTitle);
+  const safeId = stripCrlf(booking.id);
+  const safeUtr = stripCrlf(booking.utr);
+  const safeMeet = stripCrlf(booking.meetUrl);
   const desc = [
-    `1:1 Session with ${SITE_CONFIG.ownerName}`,
-    `Booking ID: ${booking.id}`,
-    `Topic: ${booking.topicTitle}`,
+    `1:1 Session with ${stripCrlf(SITE_CONFIG.ownerName)}`,
+    `Booking ID: ${safeId}`,
+    `Topic: ${topicTitle}`,
     `Fee: ₹${SITE_CONFIG.sessionFeeInr} INR`,
-    booking.utr ? `Payment Ref / UTR: ${booking.utr}` : "Payment Ref / UTR: Pending verification",
-    booking.meetUrl ? `Google Meet: ${booking.meetUrl}` : "",
-    `Agenda: ${booking.agenda.replace(/\r?\n/g, " ")}`,
+    safeUtr ? `Payment Ref / UTR: ${safeUtr}` : "Payment Ref / UTR: Pending verification",
+    safeMeet ? `Google Meet: ${safeMeet}` : "",
+    `Agenda: ${stripCrlf(booking.agenda)}`,
     `Location: ${location}`,
   ]
     .filter(Boolean)
@@ -1048,17 +1058,17 @@ function buildIcsContent(booking) {
     "CALSCALE:GREGORIAN",
     "METHOD:REQUEST",
     "BEGIN:VEVENT",
-    `UID:${booking.id}@ayushbpl10.github.io`,
+    `UID:${safeId}@ayushbpl10.github.io`,
     `DTSTAMP:${formatIcsUtc(new Date())}`,
     `DTSTART:${formatIcsUtc(start)}`,
     `DTEND:${formatIcsUtc(end)}`,
-    `ORGANIZER;CN=${SITE_CONFIG.ownerName}:mailto:${hostEmail}`,
-    `ATTENDEE;CN=${SITE_CONFIG.ownerName};RSVP=TRUE:mailto:${hostEmail}`,
-    `ATTENDEE;CN=${booking.name};RSVP=TRUE:mailto:${booking.email}`,
-    `SUMMARY:1:1 Session with ${SITE_CONFIG.ownerName} (${booking.topicTitle})`,
+    `ORGANIZER;CN=${stripCrlf(SITE_CONFIG.ownerName)}:mailto:${hostEmail}`,
+    `ATTENDEE;CN=${stripCrlf(SITE_CONFIG.ownerName)};RSVP=TRUE:mailto:${hostEmail}`,
+    `ATTENDEE;CN=${guestName};RSVP=TRUE:mailto:${guestEmail}`,
+    `SUMMARY:1:1 Session with ${stripCrlf(SITE_CONFIG.ownerName)} (${topicTitle})`,
     `DESCRIPTION:${desc}`,
     `LOCATION:${location}`,
-    booking.meetUrl ? `URL:${booking.meetUrl}` : "",
+    safeMeet ? `URL:${safeMeet}` : "",
     "STATUS:CONFIRMED",
     "END:VEVENT",
     "END:VCALENDAR",
@@ -1107,6 +1117,10 @@ function buildGcalUrl(booking) {
 function getSavedBookings() {
   try {
     return JSON.parse(localStorage.getItem("ag_session_bookings") || "[]");
+    const parsed = JSON.parse(localStorage.getItem("ag_session_bookings") || "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((b) => b && typeof b === "object" && typeof b.id === "string" && typeof b.startIso === "string")
+      : [];
   } catch {
     return [];
   }

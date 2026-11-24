@@ -25,7 +25,7 @@ export const SITE_CONFIG = {
 
   // Optional: HTTPS backend URL running server/server.js (e.g. "https://api.yourdomain.com")
   // Enables Razorpay Standard Checkout, automatic email to ayushbpl10@gmail.com, and live Google Meet creation.
-  razorpayApiBaseUrl: "",
+  razorpayApiBaseUrl: "https://bio-api.34.75.108.42.sslip.io",
 
   // Booking notification email (receives booking details & calendar invitations)
   contactEmail: "ayushbpl10@gmail.com",

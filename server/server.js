@@ -3,8 +3,44 @@ import http from "node:http";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import Razorpay from "razorpay";
-import { isValidTuesdayDate, processBookingActions } from "./notifications.js";
+import {
+  isValidEmail,
+  isValidTuesdayDate,
+  processBookingActions,
+  sanitizeBookingInput,
+} from "./notifications.js";
 import { handleCreateOrder, handleVerifyPayment } from "./razorpay-handlers.js";
+
+function setSecurityHeaders(res) {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Cache-Control", "no-store");
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.socket?.remoteAddress || "unknown";
+}
+
+function createRateLimiter({ windowMs = 60_000, maxRequests = 30, maxBuckets = 2000 } = {}) {
+  const hits = new Map();
+  return (key, now = Date.now()) => {
+    if (hits.size > maxBuckets) hits.clear();
+    const recent = (hits.get(key) || []).filter((ts) => now - ts < windowMs);
+    if (recent.length >= maxRequests) {
+      hits.set(key, recent);
+      const retryAfterSec = Math.max(1, Math.ceil((windowMs - (now - recent[0])) / 1000));
+      return { allowed: false, retryAfterSec };
+    }
+    recent.push(now);
+    hits.set(key, recent);
+    return { allowed: true, retryAfterSec: 0 };
+  };
+}
 
 function getConfigFromEnv(env = process.env) {
   const keyId = env.RAZORPAY_KEY_ID || "";
@@ -88,8 +124,14 @@ export function readJsonBody(req, limitBytes = 32768) {
 
 export function createAppServer(overrides = {}) {
   const cfg = { ...getConfigFromEnv(), ...overrides };
+  const checkRate = createRateLimiter({
+    windowMs: cfg.rateLimitWindowMs ?? 60_000,
+    maxRequests: cfg.rateLimitMax ?? 30,
+    maxBuckets: cfg.rateLimitMaxBuckets ?? 2000,
+  });
 
   return http.createServer(async (req, res) => {
+    setSecurityHeaders(res);
     setCorsHeaders(req, res, cfg.allowedOrigins);
 
     if (req.method === "OPTIONS") {
@@ -114,6 +156,13 @@ export function createAppServer(overrides = {}) {
 
     if (req.method !== "POST") {
       sendJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+
+    const rate = checkRate(getClientIp(req));
+    if (!rate.allowed) {
+      res.setHeader("Retry-After", String(rate.retryAfterSec));
+      sendJson(res, 429, { error: "Too many requests. Please retry shortly." });
       return;
     }
 
@@ -157,8 +206,8 @@ export function createAppServer(overrides = {}) {
     }
 
     if (url.pathname === "/api/book-session") {
-      const booking = body?.booking || body;
-      if (!booking?.name || !booking?.email || !isValidTuesdayDate(booking?.dateStr)) {
+      const booking = sanitizeBookingInput(body?.booking || body);
+      if (!booking.name || !isValidEmail(booking.email) || !isValidTuesdayDate(booking.dateStr)) {
         sendJson(res, 400, {
           error: "Valid guest name, email, and Tuesday session date (YYYY-MM-DD) are required.",
         });

@@ -2,6 +2,46 @@ import nodemailer from "nodemailer";
 
 const DEFAULT_NOTIFY_EMAIL = "ayushbpl10@gmail.com";
 
+export function sanitizeSingleLine(value, maxLen = 160) {
+  return String(value ?? "")
+    .replace(/[\r\n\u0000-\u001f\u007f]+/g, " ")
+    .trim()
+    .slice(0, maxLen);
+}
+
+export function isValidEmail(email) {
+  const clean = sanitizeSingleLine(email, 160);
+  return /^[^\s@<>()[\]\\,;:"']+@[^\s@<>()[\]\\,;:"']+\.[^\s@<>()[\]\\,;:"']{2,}$/.test(clean);
+}
+
+export function sanitizeHttpUrl(rawUrl) {
+  const clean = sanitizeSingleLine(rawUrl, 300);
+  if (!clean) return "";
+  try {
+    const parsed = new URL(clean);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+export function sanitizeBookingInput(raw = {}) {
+  const name = sanitizeSingleLine(raw.name, 120);
+  const email = sanitizeSingleLine(raw.email, 160);
+  const dateStr = sanitizeSingleLine(raw.dateStr, 20);
+  return {
+    id: sanitizeSingleLine(raw.id || `AG-${Date.now().toString(36).toUpperCase()}`, 40),
+    name,
+    email,
+    dateStr,
+    dateLabel: sanitizeSingleLine(raw.dateLabel, 80),
+    topicTitle: sanitizeSingleLine(raw.topicTitle, 120),
+    profile: sanitizeHttpUrl(raw.profile),
+    utr: sanitizeSingleLine(raw.utr, 64),
+    agenda: String(raw.agenda ?? "").replace(/\u0000/g, "").trim().slice(0, 1000),
+  };
+}
+
 /**
  * Validates that a booking falls on a Tuesday in Asia/Kolkata (IST).
  */
@@ -189,11 +229,12 @@ export async function sendBookingNotificationEmail({
  * Coordinates Google Meet creation + Gmail notification cleanly with partial-failure resilience.
  */
 export async function processBookingActions({ booking, env = process.env, fetchImpl = fetch, createTransportImpl }) {
+  const safeBooking = sanitizeBookingInput(booking);
   let meetResult = { created: false, meetUrl: env.STATIC_MEET_URL || "" };
   let emailResult = { sent: false };
 
   try {
-    meetResult = await createGoogleMeetEvent({ booking, env, fetchImpl });
+    meetResult = await createGoogleMeetEvent({ booking: safeBooking, env, fetchImpl });
   } catch (err) {
     meetResult = {
       created: false,
@@ -204,7 +245,7 @@ export async function processBookingActions({ booking, env = process.env, fetchI
 
   try {
     emailResult = await sendBookingNotificationEmail({
-      booking,
+      booking: safeBooking,
       meetUrl: meetResult.meetUrl,
       env,
       createTransportImpl,
