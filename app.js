@@ -6,7 +6,7 @@ import { renderQrSvg } from "./qr.js?v=20261126";
    1. Conditional Polyfill Loading (Popover)
    ========================================================================== */
 if (!Object.hasOwn(HTMLElement.prototype, "popover")) {
-  import("https://unpkg.com/@oddbird/popover-polyfill@latest/dist/popover.min.js").catch(() => { });
+  import("https://unpkg.com/@oddbird/popover-polyfill@0.6.1/dist/popover.min.js").catch(() => { });
 }
 
 const supportsScopedTransition = "startViewTransition" in Element.prototype;

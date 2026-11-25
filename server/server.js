@@ -16,6 +16,7 @@ function setSecurityHeaders(res) {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
 }
 
 function getClientIp(req) {
@@ -189,11 +190,12 @@ export function createAppServer(overrides = {}) {
     if (url.pathname === "/api/verify-payment") {
       const result = handleVerifyPayment({ body, keySecret: cfg.keySecret });
       if (result.status === 200 && body?.booking && isValidTuesdayDate(body.booking.dateStr)) {
+        const cleanBooking = sanitizeBookingInput({
+          ...body.booking,
+          utr: body.razorpay_payment_id || body.booking.utr || "",
+        });
         const bookingActions = await processBookingActions({
-          booking: {
-            ...body.booking,
-            utr: body.razorpay_payment_id || body.booking.utr || "",
-          },
+          booking: cleanBooking,
           env: cfg.env,
           fetchImpl: cfg.fetchImpl,
           createTransportImpl: cfg.createTransportImpl,
