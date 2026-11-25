@@ -14,8 +14,12 @@ function readSlots(filePath) {
 
 function writeSlots(filePath, list) {
   if (!filePath) return;
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(list, null, 2), "utf8");
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(list, null, 2), "utf8");
+  } catch (err) {
+    console.error("Failed to persist booked slots:", err?.message || err);
+  }
 }
 
 export function createSlotStore({ filePath = "" } = {}) {

@@ -27,8 +27,12 @@ function readRecords(filePath) {
 
 function writeRecords(filePath, records) {
   if (!filePath) return;
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(records, null, 2), "utf8");
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(records, null, 2), "utf8");
+  } catch (err) {
+    console.error("Failed to persist discount redemptions:", err?.message || err);
+  }
 }
 
 export function createDiscountStore({ code = DEFAULT_DISCOUNT_CODE, filePath = "" } = {}) {
