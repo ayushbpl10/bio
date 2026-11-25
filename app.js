@@ -296,33 +296,46 @@ PROFILE.sessionTopics.forEach((topic, idx) => {
   modulesEl.append(btn);
 });
 
-// Render Developer Workbench Brand Logos (Languages, Cloud, IDEs)
+// Render Clean 4-Lane Developer Workbench (Languages, Cloud, IDEs, AI Agents)
 const devStackDock = document.getElementById("dev-stack-dock");
-if (devStackDock && Array.isArray(PROFILE.devWorkbench)) {
-  PROFILE.devWorkbench.forEach((item, idx) => {
-    const pill = document.createElement("span");
-    pill.className = "stack-pill";
-    pill.style.setProperty("--stagger", `${idx * 40}ms`);
-    pill.style.setProperty("--brand-color", item.color);
+if (devStackDock && Array.isArray(PROFILE.devWorkbenchLanes)) {
+  let tileIdx = 0;
+  for (const lane of PROFILE.devWorkbenchLanes) {
+    const group = document.createElement("div");
+    group.className = "workbench-lane";
 
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("class", "brand-svg");
-    svg.setAttribute("aria-hidden", "true");
-    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-    use.setAttribute("href", `#brand-${item.icon}`);
-    svg.append(use);
+    const heading = document.createElement("p");
+    heading.className = "lane-label";
+    heading.textContent = lane.label;
 
-    const label = document.createElement("span");
-    label.className = "stack-pill-name";
-    label.textContent = item.name;
+    const row = document.createElement("div");
+    row.className = "lane-tiles";
 
-    const cat = document.createElement("span");
-    cat.className = "stack-pill-cat";
-    cat.textContent = item.category;
+    for (const item of lane.items) {
+      const tile = document.createElement("span");
+      tile.className = "stack-tile";
+      tile.style.setProperty("--stagger", `${tileIdx * 30}ms`);
+      tile.style.setProperty("--brand-color", item.color);
+      tileIdx++;
 
-    pill.append(svg, label, cat);
-    devStackDock.append(pill);
-  });
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "brand-svg");
+      svg.setAttribute("aria-hidden", "true");
+      const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+      use.setAttribute("href", `#brand-${item.icon}`);
+      svg.append(use);
+
+      const label = document.createElement("span");
+      label.className = "stack-tile-name";
+      label.textContent = item.name;
+
+      tile.append(svg, label);
+      row.append(tile);
+    }
+
+    group.append(heading, row);
+    devStackDock.append(group);
+  }
 }
 
 // Persistent Capabilities Matrix with Scoped View Transitions (keeps DOM identity for match-element)

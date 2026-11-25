@@ -1346,33 +1346,60 @@ body {
   letter-spacing: 0.06em;
 }
 
-.dev-stack-dock {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  padding: 0.95rem 1rem;
+.workbench-lanes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1.1rem;
 }
 
-.stack-pill {
+@media (max-width: 720px) {
+  .workbench-lanes {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.85rem;
+    padding: 0.9rem;
+  }
+}
+
+.workbench-lane {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-inline-size: 0;
+}
+
+.lane-label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lane-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.stack-tile {
   display: inline-flex;
   align-items: center;
   gap: 0.48rem;
-  padding: 0.42rem 0.72rem;
-  border-radius: 999px;
+  padding: 0.44rem 0.72rem;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  background: var(--surface-alt);
-  font-size: 0.82rem;
+  background: var(--surface);
+  font-size: 0.84rem;
   font-weight: 600;
   color: var(--text);
   transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.stack-pill-cat {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  color: var(--muted);
-  padding-inline-start: 0.35rem;
-  border-inline-start: 1px solid var(--border);
 }
 
 /* Scroll Progress Bar */
@@ -1393,13 +1420,13 @@ body {
     animation: cursor-blink 1.15s steps(2, start) infinite;
   }
 
-  .stack-pill {
+  .stack-tile {
     animation: stack-enter 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
     animation-delay: var(--stagger, 0ms);
   }
 
-  .stack-pill:hover {
-    transform: translateY(-3px) scale(1.03);
+  .stack-tile:hover {
+    transform: translateY(-2px);
     border-color: var(--brand-color, var(--accent));
     background: color-mix(in oklab, var(--brand-color, var(--accent)) 10%, var(--surface));
   }
