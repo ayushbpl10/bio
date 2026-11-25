@@ -1,6 +1,6 @@
-import { SITE_CONFIG } from "./config.js?v=20261126b";
-import { PROFILE } from "./data.js?v=20261126b";
-import { renderQrSvg } from "./qr.js?v=20261126b";
+import { SITE_CONFIG } from "./config.js?v=20261126c";
+import { PROFILE } from "./data.js?v=20261126c";
+import { renderQrSvg } from "./qr.js?v=20261126c";
 
 /* ==========================================================================
    1. Conditional Polyfill Loading (Popover)
@@ -1002,16 +1002,7 @@ async function applyDiscountCode() {
   if (!raw) {
     appliedDiscount = null;
     if (removeDiscountBtn) removeDiscountBtn.hidden = true;
-    setDiscountFeedback("Enter a discount code first.", "error");
-    updateCheckoutSummary();
-    return;
-  }
-
-  const configured = (SITE_CONFIG.discountCode || "").trim().toUpperCase();
-  if (configured && raw !== configured) {
-    appliedDiscount = null;
-    if (removeDiscountBtn) removeDiscountBtn.hidden = true;
-    setDiscountFeedback("Invalid discount code.", "error");
+    setDiscountFeedback("Enter an invite code first.", "error");
     updateCheckoutSummary();
     return;
   }
@@ -1019,55 +1010,55 @@ async function applyDiscountCode() {
   if (isDiscountUsedLocally(raw)) {
     appliedDiscount = null;
     if (removeDiscountBtn) removeDiscountBtn.hidden = true;
-    setDiscountFeedback(`Discount code ${raw} has already been used with your email or details.`, "error");
+    setDiscountFeedback("This invite code has already been used with your email or details.", "error");
+    updateCheckoutSummary();
+    return;
+  }
+
+  if (!razorpayApiBase) {
+    appliedDiscount = null;
+    if (removeDiscountBtn) removeDiscountBtn.hidden = true;
+    setDiscountFeedback("Discount validation requires the live booking backend.", "error");
     updateCheckoutSummary();
     return;
   }
 
   const id = getDiscountIdentity();
-  if (razorpayApiBase) {
-    try {
-      const res = await fetchWithTimeout(
-        `${razorpayApiBase}/api/validate-discount`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: raw, email: id.email, profile: id.profile, name: id.name }),
-        },
-        3000
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.valid) {
-        appliedDiscount = null;
-        if (removeDiscountBtn) removeDiscountBtn.hidden = true;
-        setDiscountFeedback(data.error || "Discount code could not be applied.", "error");
-        updateCheckoutSummary();
-        return;
-      }
-      appliedDiscount = {
-        code: data.code || raw,
-        discountPct: data.discountPct || 50,
-        feeInr: data.finalAmountInr || Math.round(SITE_CONFIG.sessionFeeInr / 2),
-      };
-    } catch {
-      appliedDiscount = {
-        code: raw,
-        discountPct: SITE_CONFIG.discountPercent || 50,
-        feeInr: Math.round((SITE_CONFIG.sessionFeeInr * (100 - (SITE_CONFIG.discountPercent || 50))) / 100),
-      };
+  try {
+    const res = await fetchWithTimeout(
+      `${razorpayApiBase}/api/validate-discount`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: raw, email: id.email, profile: id.profile, name: id.name }),
+      },
+      3000
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.valid) {
+      appliedDiscount = null;
+      if (removeDiscountBtn) removeDiscountBtn.hidden = true;
+      setDiscountFeedback(data.error || "Invalid or already used invite code.", "error");
+      updateCheckoutSummary();
+      return;
     }
-  } else {
     appliedDiscount = {
-      code: raw,
-      discountPct: SITE_CONFIG.discountPercent || 50,
-      feeInr: Math.round((SITE_CONFIG.sessionFeeInr * (100 - (SITE_CONFIG.discountPercent || 50))) / 100),
+      code: data.code || raw,
+      discountPct: data.discountPct || 50,
+      feeInr: data.finalAmountInr || Math.round(SITE_CONFIG.sessionFeeInr / 2),
     };
+  } catch {
+    appliedDiscount = null;
+    if (removeDiscountBtn) removeDiscountBtn.hidden = true;
+    setDiscountFeedback("Unable to verify invite code right now. Please try again.", "error");
+    updateCheckoutSummary();
+    return;
   }
 
   if (discountCodeInput) discountCodeInput.value = appliedDiscount.code;
   if (removeDiscountBtn) removeDiscountBtn.hidden = false;
   setDiscountFeedback(
-    `Code ${appliedDiscount.code} applied — 50% off (₹${appliedDiscount.feeInr} INR).`,
+    `Invite code applied — 50% off (₹${appliedDiscount.feeInr} INR).`,
     "valid"
   );
   updateCheckoutSummary();

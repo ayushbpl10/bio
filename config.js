@@ -15,8 +15,6 @@ export const SITE_CONFIG = {
   sessionFeeInr: 500,
   sessionCurrency: "INR",
   sessionDurationMins: 60,
-  discountCode: "AYUSH50",
-  discountPercent: 50,
 
   // Live UPI VPA for instant zero-fee ₹500 QR & deep-link payments
   upiId: "ayushbpl10@ybl",

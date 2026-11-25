@@ -744,13 +744,13 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
   assert.equal(norm.profileKey, "https://github.com/testuser");
   assert.equal(norm.nameKey, "test user");
 
-  const store = createDiscountStore({ filePath: storePath });
-  assert.equal(store.getCode(), DEFAULT_DISCOUNT_CODE);
+  const store = createDiscountStore({ code: "TEST-DISC-9X", filePath: storePath });
+  assert.equal(store.getCode(), "TEST-DISC-9X");
   assert.equal(store.validate({ code: "" }).amountInr, 500);
   assert.equal(store.validate({ code: "BADCODE" }).status, 400);
 
   const okCheck = store.validate({
-    code: "ayush50",
+    code: "test-disc-9x",
     email: "alice@example.com",
     profile: "https://github.com/alice",
     name: "Alice Doe",
@@ -772,7 +772,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
         },
       },
     },
-    env: {},
+    env: { DISCOUNT_CODE: "TEST-DISC-9X" },
   });
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -791,7 +791,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
     const valRes = await fetch(`${baseUrl}/api/validate-discount`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: "AYUSH50", email: "alice@example.com", name: "Alice Doe" }),
+      body: JSON.stringify({ code: "TEST-DISC-9X", email: "alice@example.com", name: "Alice Doe" }),
     });
     assert.equal(valRes.status, 200);
     const valJson = await valRes.json();
@@ -804,7 +804,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
       body: JSON.stringify({
         amount: 50000,
         currency: "INR",
-        discountCode: "AYUSH50",
+        discountCode: "TEST-DISC-9X",
         email: "alice@example.com",
         name: "Alice Doe",
       }),
@@ -827,7 +827,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
           email: "alice@example.com",
           profile: "https://github.com/alice",
           dateStr: "2026-12-08",
-          discountCode: "AYUSH50",
+          discountCode: "TEST-DISC-9X",
         },
       }),
     });
@@ -837,7 +837,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
     const reuseEmail = await fetch(`${baseUrl}/api/create-order`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ discountCode: "AYUSH50", email: "ALICE@EXAMPLE.COM", name: "Someone Else" }),
+      body: JSON.stringify({ discountCode: "TEST-DISC-9X", email: "ALICE@EXAMPLE.COM", name: "Someone Else" }),
     });
     assert.equal(reuseEmail.status, 409);
 
@@ -851,7 +851,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
           email: "other@example.com",
           profile: "https://github.com/alice/",
           dateStr: "2026-12-08",
-          discountCode: "AYUSH50",
+          discountCode: "TEST-DISC-9X",
         },
       }),
     });
@@ -866,7 +866,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
           name: "Bob Builder",
           email: "bob@example.com",
           dateStr: "2026-12-08",
-          discountCode: "AYUSH50",
+          discountCode: "TEST-DISC-9X",
         },
       }),
     });
@@ -880,7 +880,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
           name: "Bob Builder",
           email: "bob2@example.com",
           dateStr: "2026-12-08",
-          discountCode: "AYUSH50",
+          discountCode: "TEST-DISC-9X",
         },
       }),
     });
@@ -897,8 +897,8 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
     assert.equal(badBook.status, 400);
 
     // 8. Reloading store from disk preserves persisted redemptions
-    const reloaded = createDiscountStore({ filePath: storePath });
-    assert.equal(reloaded.validate({ code: "AYUSH50", email: "alice@example.com" }).status, 409);
+    const reloaded = createDiscountStore({ code: "TEST-DISC-9X", filePath: storePath });
+    assert.equal(reloaded.validate({ code: "TEST-DISC-9X", email: "alice@example.com" }).status, 409);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     fs.rmSync(tmpDir, { recursive: true, force: true });

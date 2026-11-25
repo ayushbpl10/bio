@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export const DEFAULT_DISCOUNT_CODE = "AYUSH50";
+export const DEFAULT_DISCOUNT_CODE = "";
 export const BASE_FEE_INR = 500;
 export const BASE_FEE_PAISE = 50000;
 export const DISCOUNT_PERCENT = 50;
@@ -32,7 +32,7 @@ function writeRecords(filePath, records) {
 }
 
 export function createDiscountStore({ code = DEFAULT_DISCOUNT_CODE, filePath = "" } = {}) {
-  const configuredCode = String(code || DEFAULT_DISCOUNT_CODE).trim().toUpperCase();
+  const configuredCode = String(code || "").trim().toUpperCase();
   const records = readRecords(filePath);
 
   function validate({ code: inputCode, email, profile, name } = {}) {
@@ -48,7 +48,7 @@ export function createDiscountStore({ code = DEFAULT_DISCOUNT_CODE, filePath = "
       };
     }
 
-    if (cleanCode !== configuredCode) {
+    if (!configuredCode || cleanCode !== configuredCode) {
       return {
         ok: false,
         status: 400,
