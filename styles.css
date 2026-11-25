@@ -1872,7 +1872,8 @@ textarea {
   cursor: wait;
 }
 
-:is(input, textarea):is(:user-invalid, .user-invalid-fallback) + .error-msg {
+:is(input, textarea):is(:user-invalid, .user-invalid-fallback) + .error-msg,
+#slot-error:not([hidden]) {
   display: block;
 }
 
