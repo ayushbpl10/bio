@@ -1,6 +1,6 @@
-import { SITE_CONFIG } from "./config.js";
-import { PROFILE } from "./data.js";
-import { renderQrSvg } from "./qr.js";
+import { SITE_CONFIG } from "./config.js?v=20261126";
+import { PROFILE } from "./data.js?v=20261126";
+import { renderQrSvg } from "./qr.js?v=20261126";
 
 /* ==========================================================================
    1. Conditional Polyfill Loading (Popover)
