@@ -15,8 +15,22 @@ function runScopedTransition(scopeEl, updateDOM) {
     updateDOM();
     return;
   }
-  const transition = scopeEl.startViewTransition(() => updateDOM());
-  transition.ready.catch(() => { });
+  try {
+    const transition = scopeEl.startViewTransition(() => updateDOM());
+    transition.ready.catch(() => { });
+  } catch {
+    updateDOM();
+  }
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 3500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /* ==========================================================================
@@ -594,9 +608,7 @@ if (!isLiveUpiConfigured && !isLiveRazorpayConfigured && !razorpayApiBase) {
 async function syncBackendCapabilities() {
   if (!razorpayApiBase || !razorpayCheckoutBtn) return;
   try {
-    const res = await fetch(`${razorpayApiBase}/health`, {
-      signal: AbortSignal.timeout ? AbortSignal.timeout(3500) : undefined,
-    });
+    const res = await fetchWithTimeout(`${razorpayApiBase}/health`, {}, 3500);
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.configured) {
       razorpayCheckoutBtn.hidden = false;
@@ -1116,7 +1128,6 @@ function buildGcalUrl(booking) {
 
 function getSavedBookings() {
   try {
-    return JSON.parse(localStorage.getItem("ag_session_bookings") || "[]");
     const parsed = JSON.parse(localStorage.getItem("ag_session_bookings") || "[]");
     return Array.isArray(parsed)
       ? parsed.filter((b) => b && typeof b === "object" && typeof b.id === "string" && typeof b.startIso === "string")
@@ -1306,17 +1317,21 @@ async function startRazorpayCheckout() {
   setCheckoutBusy(true, "Creating Razorpay order…");
   try {
     await ensureRazorpaySdk();
-    const orderRes = await fetch(`${razorpayApiBase}/api/create-order`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        amount: SITE_CONFIG.sessionFeeInr * 100,
-        currency: SITE_CONFIG.sessionCurrency,
-        receipt: `ag_${dateStr}_${slot.id}`.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40),
-        topic: topic.id,
-        slot: `${dateStr} ${slot.label}`,
-      }),
-    });
+    const orderRes = await fetchWithTimeout(
+      `${razorpayApiBase}/api/create-order`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: SITE_CONFIG.sessionFeeInr * 100,
+          currency: SITE_CONFIG.sessionCurrency,
+          receipt: `ag_${dateStr}_${slot.id}`.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40),
+          topic: topic.id,
+          slot: `${dateStr} ${slot.label}`,
+        }),
+      },
+      10000
+    );
     const orderData = await orderRes.json().catch(() => ({}));
     if (!orderRes.ok || !orderData.order_id || !orderData.key_id) {
       throw new Error(orderData.error || `Order creation failed (HTTP ${orderRes.status}).`);
@@ -1351,16 +1366,20 @@ async function startRazorpayCheckout() {
         try {
           const verifiedRef = `${paymentResp.razorpay_payment_id} (Razorpay Verified)`;
           const pendingBooking = buildBookingFromForm(slot, verifiedRef);
-          const verifyRes = await fetch(`${razorpayApiBase}/api/verify-payment`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              razorpay_order_id: paymentResp.razorpay_order_id,
-              razorpay_payment_id: paymentResp.razorpay_payment_id,
-              razorpay_signature: paymentResp.razorpay_signature,
-              booking: pendingBooking,
-            }),
-          });
+          const verifyRes = await fetchWithTimeout(
+            `${razorpayApiBase}/api/verify-payment`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: paymentResp.razorpay_order_id,
+                razorpay_payment_id: paymentResp.razorpay_payment_id,
+                razorpay_signature: paymentResp.razorpay_signature,
+                booking: pendingBooking,
+              }),
+            },
+            10000
+          );
           const verifyData = await verifyRes.json().catch(() => ({}));
           if (!verifyRes.ok || !verifyData.verified) {
             throw new Error(verifyData.error || "Payment verification failed.");
@@ -1404,20 +1423,26 @@ razorpayCheckoutBtn?.addEventListener("click", startRazorpayCheckout);
 
 bookingForm.addEventListener("submit", async (e) => {
   e.preventDefault();
+  const confirmBtn = document.getElementById("confirm-booking-btn");
+  if (confirmBtn?.getAttribute("aria-busy") === "true") return;
+
   showRazorpayError("");
   const slot = validateBookingInputs();
   if (!slot) return;
 
   const booking = buildBookingFromForm(slot);
   if (razorpayApiBase) {
-    const confirmBtn = document.getElementById("confirm-booking-btn");
     confirmBtn?.setAttribute("aria-busy", "true");
     try {
-      const res = await fetch(`${razorpayApiBase}/api/book-session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ booking }),
-      });
+      const res = await fetchWithTimeout(
+        `${razorpayApiBase}/api/book-session`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ booking }),
+        },
+        3000
+      );
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         booking.meetUrl = data.meet_url || SITE_CONFIG.meetingLink || "";

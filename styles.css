@@ -225,6 +225,7 @@ html {
   background-color: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+  scroll-padding-block-start: 5.75rem;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -964,6 +965,14 @@ body {
   min-inline-size: 0;
   inline-size: 100%;
   max-inline-size: 100%;
+  position: relative;
+  z-index: 1;
+  scroll-margin-block-start: 5.75rem;
+}
+
+[role="tabpanel"][hidden] {
+  pointer-events: none;
+  z-index: 0;
 }
 
 .panel-surface {
@@ -1046,6 +1055,12 @@ body {
 ::view-transition-group(*) {
   animation-duration: 260ms;
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+::view-transition-old(*),
+::view-transition-new(*) {
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
