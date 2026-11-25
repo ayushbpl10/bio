@@ -1346,6 +1346,19 @@ body {
   letter-spacing: 0.06em;
 }
 
+.hero-perks {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem 1.25rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .workbench-lanes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1354,7 +1367,20 @@ body {
 }
 
 @media (max-width: 720px) {
-  .workbench-lanes {
+  .hero-perks {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem 1.25rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.workbench-lanes {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.85rem;
     padding: 0.9rem;

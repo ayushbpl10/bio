@@ -774,6 +774,10 @@ PROFILE.sessionTopics.forEach((topic, idx) => {
 
 const upcomingDates = getUpcomingTuesdays(8);
 const firstAvailableTuesday = upcomingDates[0].str;
+const heroNextSlotEl = document.getElementById("hero-next-slot");
+if (heroNextSlotEl) {
+  heroNextSlotEl.textContent = `Senior SWE @ Dell · Next 1:1 Seat: Tue, ${upcomingDates[0].dayNum} · 6:00 PM IST`;
+}
 dateInput.min = firstAvailableTuesday;
 dateInput.step = "7";
 dateInput.value = firstAvailableTuesday;
