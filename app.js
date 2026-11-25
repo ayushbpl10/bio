@@ -1677,20 +1677,33 @@ async function startRazorpayCheckout() {
         try {
           const verifiedRef = `${paymentResp.razorpay_payment_id} (Razorpay Verified)`;
           const pendingBooking = buildBookingFromForm(slot, verifiedRef);
-          const verifyRes = await fetchWithTimeout(
-            `${razorpayApiBase}/api/verify-payment`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                razorpay_order_id: paymentResp.razorpay_order_id,
-                razorpay_payment_id: paymentResp.razorpay_payment_id,
-                razorpay_signature: paymentResp.razorpay_signature,
-                booking: pendingBooking,
-              }),
-            },
-            10000
-          );
+          const verifyPayload = JSON.stringify({
+            razorpay_order_id: paymentResp.razorpay_order_id,
+            razorpay_payment_id: paymentResp.razorpay_payment_id,
+            razorpay_signature: paymentResp.razorpay_signature,
+            booking: pendingBooking,
+          });
+          // Money has already moved: retry transient network/5xx failures before giving up.
+          let verifyRes;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              verifyRes = await fetchWithTimeout(
+                `${razorpayApiBase}/api/verify-payment`,
+                { method: "POST", headers: { "Content-Type": "application/json" }, body: verifyPayload },
+                15000
+              );
+              if (verifyRes.status < 500) break;
+            } catch (netErr) {
+              if (attempt === 3) {
+                throw new Error(
+                  `Payment ${paymentResp.razorpay_payment_id} succeeded, but we could not reach the server to confirm your slot. ` +
+                    "Do NOT pay again — save this payment ID and email it to Ayush."
+                );
+              }
+            }
+            await new Promise((r) => setTimeout(r, 1500 * attempt));
+          }
+          if (!verifyRes) throw new Error(`Payment ${paymentResp.razorpay_payment_id} succeeded but verification is pending. Contact Ayush with this ID.`);
           const verifyData = await verifyRes.json().catch(() => ({}));
           if (!verifyRes.ok || !verifyData.verified) {
             throw new Error(verifyData.error || "Payment verification failed.");
