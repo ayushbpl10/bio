@@ -8,6 +8,7 @@ import path from "node:path";
 import { PassThrough } from "node:stream";
 import test from "node:test";
 import { createDiscountStore, DEFAULT_DISCOUNT_CODE, normalizeIdentity } from "./discounts.js";
+import { createSlotStore } from "./slots.js";
 import {
   createGoogleMeetEvent,
   isValidEmail,
@@ -405,6 +406,8 @@ test("HTTP server covers CORS, OPTIONS, 405, 404, bad JSON, 413, create-order, v
   const server = createAppServer({
     keyId: "rzp_test_smoke",
     keySecret: secret,
+    slotStorePath: "",
+    discountStorePath: "",
     allowedOrigins: new Set(["https://ayushbpl10.github.io"]),
     env: {
       BOOKING_NOTIFY_EMAIL: "ayushbpl10@gmail.com",
@@ -570,7 +573,7 @@ test("HTTP server covers CORS, OPTIONS, 405, 404, bad JSON, 413, create-order, v
         id: "AG-2612-TUE1",
         name: "Test Guest",
         email: "guest@example.com",
-        dateStr: "2026-12-08",
+        dateStr: "2026-12-15",
         topicTitle: "Observability",
         agenda: "OTel collectors",
       }),
@@ -764,6 +767,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
     keyId: "rzp_test_discount",
     keySecret: "sec_discount",
     discountStorePath: storePath,
+    slotStorePath: path.join(tmpDir, "server-slots.json"),
     razorpayClient: {
       orders: {
         create: async (p) => {
@@ -850,7 +854,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
           name: "Another Name",
           email: "other@example.com",
           profile: "https://github.com/alice/",
-          dateStr: "2026-12-08",
+          dateStr: "2026-12-15",
           discountCode: "TEST-DISC-9X",
         },
       }),
@@ -865,7 +869,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
         booking: {
           name: "Bob Builder",
           email: "bob@example.com",
-          dateStr: "2026-12-08",
+          dateStr: "2026-12-15",
           discountCode: "TEST-DISC-9X",
         },
       }),
@@ -879,7 +883,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
         booking: {
           name: "Bob Builder",
           email: "bob2@example.com",
-          dateStr: "2026-12-08",
+          dateStr: "2026-12-22",
           discountCode: "TEST-DISC-9X",
         },
       }),
@@ -891,7 +895,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        booking: { name: "Carol", email: "carol@example.com", dateStr: "2026-12-08", discountCode: "INVALID" },
+        booking: { name: "Carol", email: "carol@example.com", dateStr: "2026-12-22", discountCode: "INVALID" },
       }),
     });
     assert.equal(badBook.status, 400);
@@ -899,6 +903,30 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
     // 8. Reloading store from disk preserves persisted redemptions
     const reloaded = createDiscountStore({ code: "TEST-DISC-9X", filePath: storePath });
     assert.equal(reloaded.validate({ code: "TEST-DISC-9X", email: "alice@example.com" }).status, 409);
+
+    // 9. Slot store prevents double-booking the same Tuesday & persists across restarts
+    const slotsPath = path.join(tmpDir, "slots.json");
+    const s1 = createSlotStore({ filePath: slotsPath });
+    assert.equal(s1.book("2026-12-01"), true);
+    assert.equal(s1.book("2026-12-01"), false);
+    assert.equal(s1.isBooked("2026-12-01"), true);
+    const s2 = createSlotStore({ filePath: slotsPath });
+    assert.deepEqual(s2.list(), ["2026-12-01"]);
+
+    // 10. Server rejects double-booked Tuesday on /api/create-order and /api/book-session (409)
+    const dupOrder = await fetch(`${baseUrl}/api/create-order`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slotDate: "2026-12-08", amount: 50000, currency: "INR" }),
+    });
+    assert.equal(dupOrder.status, 409);
+
+    const dupBook = await fetch(`${baseUrl}/api/book-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ booking: { name: "Dan", email: "dan@example.com", dateStr: "2026-12-08" } }),
+    });
+    assert.equal(dupBook.status, 409);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     fs.rmSync(tmpDir, { recursive: true, force: true });

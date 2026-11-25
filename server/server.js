@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import Razorpay from "razorpay";
 import { createDiscountStore, DEFAULT_DISCOUNT_CODE } from "./discounts.js";
+import { createSlotStore } from "./slots.js";
 import {
   isValidEmail,
   isValidTuesdayDate,
@@ -136,6 +137,14 @@ export function createAppServer(overrides = {}) {
           ? cfg.discountStorePath
           : path.join(serverDir, "discount-redemptions.json"),
     });
+  const slotStore =
+    cfg.slotStore ||
+    createSlotStore({
+      filePath:
+        cfg.slotStorePath !== undefined
+          ? cfg.slotStorePath
+          : path.join(serverDir, "booked-slots.json"),
+    });
   const checkRate = createRateLimiter({
     windowMs: cfg.rateLimitWindowMs ?? 60_000,
     maxRequests: cfg.rateLimitMax ?? 30,
@@ -162,6 +171,7 @@ export function createAppServer(overrides = {}) {
         meet_configured: Boolean(
           cfg.env?.GOOGLE_CLIENT_ID && cfg.env?.GOOGLE_CLIENT_SECRET && cfg.env?.GOOGLE_REFRESH_TOKEN
         ),
+        booked_dates: slotStore.list(),
       });
       return;
     }
@@ -211,6 +221,12 @@ export function createAppServer(overrides = {}) {
     }
 
     if (url.pathname === "/api/create-order") {
+      if (body?.slotDate && slotStore.isBooked(body.slotDate)) {
+        sendJson(res, 409, {
+          error: "This Tuesday 6:00 PM IST slot is already booked. Please select another Tuesday.",
+        });
+        return;
+      }
       let orderBody = body;
       if (body?.discountCode) {
         const discountCheck = discountStore.validate({
@@ -241,6 +257,7 @@ export function createAppServer(overrides = {}) {
           ...body.booking,
           utr: body.razorpay_payment_id || body.booking.utr || "",
         });
+        slotStore.book(cleanBooking.dateStr);
         if (cleanBooking.discountCode) {
           const redeemed = discountStore.redeem({
             code: cleanBooking.discountCode,
@@ -273,6 +290,12 @@ export function createAppServer(overrides = {}) {
         });
         return;
       }
+      if (slotStore.isBooked(booking.dateStr)) {
+        sendJson(res, 409, {
+          error: "This Tuesday 6:00 PM IST slot is already booked. Please select another Tuesday.",
+        });
+        return;
+      }
       if (booking.discountCode) {
         const redeemed = discountStore.redeem({
           code: booking.discountCode,
@@ -286,6 +309,7 @@ export function createAppServer(overrides = {}) {
         }
         booking.feeInr = redeemed.amountInr;
       }
+      slotStore.book(booking.dateStr);
       const bookingActions = await processBookingActions({
         booking,
         env: cfg.env,

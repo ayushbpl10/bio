@@ -2012,6 +2012,13 @@ body {
   gap: 0.1rem;
 }
 
+.date-chip.is-booked,
+.date-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
 .date-chip[aria-pressed="true"] {
   border-color: var(--accent);
   background: var(--accent);

@@ -1,6 +1,6 @@
-import { SITE_CONFIG } from "./config.js?v=20261126c";
-import { PROFILE } from "./data.js?v=20261126c";
-import { renderQrSvg } from "./qr.js?v=20261126c";
+import { SITE_CONFIG } from "./config.js?v=20261126d";
+import { PROFILE } from "./data.js?v=20261126d";
+import { renderQrSvg } from "./qr.js?v=20261126d";
 
 /* ==========================================================================
    1. Conditional Polyfill Loading (Popover)
@@ -668,13 +668,29 @@ if (!isLiveUpiConfigured && !isLiveRazorpayConfigured && !razorpayApiBase) {
   upiIdValueEl.textContent = isLiveUpiConfigured ? SITE_CONFIG.upiId.trim() : "Via Razorpay below";
 }
 
+const serverBookedDates = new Set();
+
+function isDateBooked(dateStr) {
+  return serverBookedDates.has(dateStr) || getSavedBookings().some((b) => b.dateStr === dateStr);
+}
+
 async function syncBackendCapabilities() {
-  if (!razorpayApiBase || !razorpayCheckoutBtn) return;
+  if (!razorpayApiBase) return;
   try {
     const res = await fetchWithTimeout(`${razorpayApiBase}/health`, {}, 3500);
     const data = await res.json().catch(() => ({}));
-    if (res.ok && data.configured) {
-      razorpayCheckoutBtn.hidden = false;
+    if (res.ok) {
+      if (data.configured && razorpayCheckoutBtn) {
+        razorpayCheckoutBtn.hidden = false;
+      }
+      if (Array.isArray(data.booked_dates)) {
+        for (const d of data.booked_dates) serverBookedDates.add(d);
+        if (isDateBooked(dateInput.value)) {
+          selectNextAvailableTuesday();
+        } else {
+          renderDateStrip();
+        }
+      }
     }
   } catch {
     // Backend unavailable or TLS not yet active — keep UPI QR and Razorpay.me handle active
@@ -779,15 +795,32 @@ PROFILE.sessionTopics.forEach((topic, idx) => {
   topicOptionsEl.append(label);
 });
 
-const upcomingDates = getUpcomingTuesdays(8);
+const upcomingDates = getUpcomingTuesdays(16);
 const firstAvailableTuesday = upcomingDates[0].str;
 const heroNextSlotEl = document.getElementById("hero-next-slot");
-if (heroNextSlotEl) {
-  heroNextSlotEl.textContent = `Senior SWE @ Dell · Next 1:1 Seat: Tue, ${upcomingDates[0].dayNum} · 6:00 PM IST`;
+
+function updateHeroNextSlot() {
+  if (!heroNextSlotEl) return;
+  const nextFree = upcomingDates.find((d) => !isDateBooked(d.str)) || upcomingDates[0];
+  heroNextSlotEl.textContent = `Senior SWE @ Dell · Next 1:1 Seat: Tue, ${nextFree.dayNum} · 6:00 PM IST`;
 }
+
+function selectNextAvailableTuesday() {
+  const nextFree = upcomingDates.find((d) => !isDateBooked(d.str));
+  if (nextFree) {
+    dateInput.value = nextFree.str;
+  }
+  validateDateInputRule();
+  renderDateStrip();
+  renderSlotsForDate(dateInput.value);
+  updateCheckoutSummary();
+  updateHeroNextSlot();
+}
+
 dateInput.min = firstAvailableTuesday;
 dateInput.step = "7";
-dateInput.value = firstAvailableTuesday;
+dateInput.value = (upcomingDates.find((d) => !isDateBooked(d.str)) || upcomingDates[0]).str;
+updateHeroNextSlot();
 
 function isValidSessionTuesday(dateStr) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
@@ -804,13 +837,25 @@ function validateDateInputRule() {
     dateInput.setCustomValidity("Sessions are available on upcoming Tuesdays only (6:00 PM IST).");
     return false;
   }
+  if (isDateBooked(dateInput.value)) {
+    dateInput.setCustomValidity("This Tuesday 6:00 PM IST slot is already booked. Please choose another Tuesday.");
+    return false;
+  }
   dateInput.setCustomValidity("");
   return true;
 }
 
 function renderDateStrip() {
   dateStripEl.innerHTML = "";
-  for (const d of upcomingDates) {
+  const available = upcomingDates.filter((d) => !isDateBooked(d.str)).slice(0, 8);
+  if (available.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "field-hint";
+    empty.textContent = "All upcoming Tuesday 6:00 PM IST slots are currently booked.";
+    dateStripEl.append(empty);
+    return;
+  }
+  for (const d of available) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "date-chip";
@@ -833,10 +878,12 @@ function renderDateStrip() {
 
 function renderSlotsForDate(dateStr) {
   slotsGridEl.innerHTML = "";
-  if (!isValidSessionTuesday(dateStr)) {
+  if (!isValidSessionTuesday(dateStr) || isDateBooked(dateStr)) {
     const notice = document.createElement("p");
     notice.className = "field-hint";
-    notice.textContent = "No session slots on non-Tuesdays — choose any upcoming Tuesday above for the 6:00 PM IST slot.";
+    notice.textContent = isDateBooked(dateStr)
+      ? "This Tuesday 6:00 PM IST slot is already booked — choose an available Tuesday above."
+      : "No session slots on non-Tuesdays — choose any upcoming Tuesday above for the 6:00 PM IST slot.";
     slotsGridEl.append(notice);
     return;
   }
@@ -876,7 +923,7 @@ function getSelectedTopic() {
 
 function getSelectedSlot() {
   const dateStr = dateInput.value;
-  if (!isValidSessionTuesday(dateStr)) return null;
+  if (!isValidSessionTuesday(dateStr) || isDateBooked(dateStr)) return null;
   const list = PROFILE.timeSlots.slots;
   const checked = bookingForm.querySelector('input[name="timeSlot"]:checked');
   return list.find((s) => s.id === checked?.value) || null;
@@ -1531,6 +1578,25 @@ function ensureRazorpaySdk() {
   });
 }
 
+function completeBookingPass(booking) {
+  serverBookedDates.add(booking.dateStr);
+  recordUsedDiscount(booking);
+  clearDiscountCode();
+  saveBooking(booking);
+
+  // Clear guest inputs & advance to the next available Tuesday to prevent accidental duplicate passes
+  for (const id of ["guest-name", "guest-email", "guest-profile", "guest-agenda", "upi-utr"]) {
+    const field = document.getElementById(id);
+    if (field) {
+      field.value = "";
+      field.classList.remove("user-invalid-fallback", "user-valid-fallback");
+      field.setAttribute("aria-invalid", "false");
+    }
+  }
+  selectNextAvailableTuesday();
+  openBookingDialog(booking);
+}
+
 async function startRazorpayCheckout() {
   if (!razorpayApiBase) return;
   if (razorpayCheckoutBtn?.getAttribute("aria-busy") === "true") return;
@@ -1566,6 +1632,7 @@ async function startRazorpayCheckout() {
           receipt: `ag_${dateStr}_${slot.id}`.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40),
           topic: topic.id,
           slot: `${dateStr} ${slot.label}`,
+          slotDate: dateStr,
           discountCode: appliedDiscount ? appliedDiscount.code : "",
           email: guestEmail,
           profile: guestProfile,
@@ -1634,10 +1701,7 @@ async function startRazorpayCheckout() {
             meetUrl: verifyData.meet_url || SITE_CONFIG.meetingLink || "",
             emailSent: Boolean(verifyData.email_sent),
           };
-          recordUsedDiscount(confirmedBooking);
-          clearDiscountCode();
-          saveBooking(confirmedBooking);
-          openBookingDialog(confirmedBooking);
+          completeBookingPass(confirmedBooking);
           showRazorpayError("");
         } catch (verifyErr) {
           showRazorpayError(
@@ -1710,10 +1774,7 @@ bookingForm.addEventListener("submit", async (e) => {
       confirmBtn?.removeAttribute("aria-busy");
     }
   }
-  recordUsedDiscount(booking);
-  clearDiscountCode();
-  saveBooking(booking);
-  openBookingDialog(booking);
+  completeBookingPass(booking);
 });
 
 for (const dlg of document.querySelectorAll("dialog")) {
