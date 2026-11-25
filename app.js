@@ -1,6 +1,6 @@
-import { SITE_CONFIG } from "./config.js?v=20261126d";
-import { PROFILE } from "./data.js?v=20261126d";
-import { renderQrSvg } from "./qr.js?v=20261126d";
+import { SITE_CONFIG } from "./config.js?v=20261126e";
+import { PROFILE } from "./data.js?v=20261126e";
+import { renderQrSvg } from "./qr.js?v=20261126e";
 
 /* ==========================================================================
    1. Conditional Polyfill Loading (Popover)
@@ -807,9 +807,7 @@ function updateHeroNextSlot() {
 
 function selectNextAvailableTuesday() {
   const nextFree = upcomingDates.find((d) => !isDateBooked(d.str));
-  if (nextFree) {
-    dateInput.value = nextFree.str;
-  }
+  dateInput.value = nextFree ? nextFree.str : "";
   validateDateInputRule();
   renderDateStrip();
   renderSlotsForDate(dateInput.value);
@@ -1212,6 +1210,10 @@ bookingForm.addEventListener(
   "blur",
   (e) => {
     const el = e.target;
+    if (el.matches?.('#guest-email, #guest-profile, #upi-utr, #discount-code') && typeof el.value === "string") {
+      const trimmed = el.value.trim();
+      if (trimmed !== el.value) el.value = trimmed;
+    }
     if (!supportsUserInvalid && el.checkValidity) {
       const st = fallbackDirty.get(el) || { hasInteracted: false, hasBlurred: false };
       st.hasBlurred = true;
@@ -1760,7 +1762,12 @@ bookingForm.addEventListener("submit", async (e) => {
       );
       const data = await res.json().catch(() => ({}));
       if (res.status === 409 || res.status === 400) {
-        if (booking.discountCode) clearDiscountCode();
+        if (res.status === 409 && /slot/i.test(data.error || "")) {
+          serverBookedDates.add(booking.dateStr);
+          selectNextAvailableTuesday();
+        } else if (booking.discountCode) {
+          clearDiscountCode();
+        }
         showRazorpayError(data.error || "Booking validation failed.");
         return;
       }
@@ -1826,6 +1833,22 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (commandDialog.open) closeTopLayer(commandDialog);
     else commandDialog.showModal();
+    return;
+  }
+  if (!commandDialog.open || e.metaKey || e.ctrlKey || e.altKey) return;
+  const key = e.key.toLowerCase();
+  const keyMap = {
+    "1": 'button[data-cmd-action="tab:tab-overview"]',
+    "2": 'button[data-cmd-action="tab:tab-experience"]',
+    "3": 'button[data-cmd-action="tab:tab-schedule"]',
+    "t": 'button[data-cmd-action="theme:toggle"]',
+    "l": 'a[href*="linkedin.com"]',
+    "g": 'a[href*="github.com"]',
+  };
+  const sel = keyMap[key];
+  if (sel) {
+    e.preventDefault();
+    commandDialog.querySelector(sel)?.click();
   }
 });
 
