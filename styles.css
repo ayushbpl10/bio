@@ -1273,6 +1273,191 @@ body {
   display: none;
 }
 
+.skill-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-inline-size: 0;
+}
+
+.brand-svg {
+  inline-size: 1.2rem;
+  block-size: 1.2rem;
+  flex: none;
+  display: block;
+}
+
+.skill-brand-svg {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+}
+
+/* Developer Workbench & Brand Logo Dock */
+.dev-workbench {
+  margin-block-start: 1.75rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--surface) 88%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  text-align: start;
+}
+
+.dev-workbench-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 1rem;
+  border-block-end: 1px solid var(--border);
+  background: var(--surface-alt);
+  font-size: 0.78rem;
+}
+
+.dev-prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.dev-prompt-sigil {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.dev-cursor {
+  inline-size: 0.48rem;
+  block-size: 0.95rem;
+  border-radius: 2px;
+  background: var(--accent);
+  display: inline-block;
+}
+
+.dev-meta {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dev-stack-dock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  padding: 0.95rem 1rem;
+}
+
+.stack-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.48rem;
+  padding: 0.42rem 0.72rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.stack-pill-cat {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+  padding-inline-start: 0.35rem;
+  border-inline-start: 1px solid var(--border);
+}
+
+/* Scroll Progress Bar */
+.scroll-progress {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 3px;
+  background: linear-gradient(90deg, var(--aurora-a), var(--aurora-b));
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  z-index: 60;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dev-cursor {
+    animation: cursor-blink 1.15s steps(2, start) infinite;
+  }
+
+  .stack-pill {
+    animation: stack-enter 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--stagger, 0ms);
+  }
+
+  .stack-pill:hover {
+    transform: translateY(-3px) scale(1.03);
+    border-color: var(--brand-color, var(--accent));
+    background: color-mix(in oklab, var(--brand-color, var(--accent)) 10%, var(--surface));
+  }
+
+  .skill-item {
+    transition: border-color 0.18s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .skill-item:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+  }
+
+  .span-bar {
+    transform-origin: left center;
+    animation: span-grow 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @supports (animation-timeline: scroll()) {
+    .scroll-progress {
+      animation: progress-fill linear both;
+      animation-timeline: scroll(root);
+    }
+  }
+}
+
+@keyframes cursor-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.18; }
+}
+
+@keyframes stack-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes span-grow {
+  from {
+    transform: scaleX(0.15);
+    opacity: 0.4;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+@keyframes progress-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
 .skill-name {
   font-weight: 600;
   font-size: 0.9rem;

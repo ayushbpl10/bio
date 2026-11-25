@@ -296,6 +296,35 @@ PROFILE.sessionTopics.forEach((topic, idx) => {
   modulesEl.append(btn);
 });
 
+// Render Developer Workbench Brand Logos (Languages, Cloud, IDEs)
+const devStackDock = document.getElementById("dev-stack-dock");
+if (devStackDock && Array.isArray(PROFILE.devWorkbench)) {
+  PROFILE.devWorkbench.forEach((item, idx) => {
+    const pill = document.createElement("span");
+    pill.className = "stack-pill";
+    pill.style.setProperty("--stagger", `${idx * 40}ms`);
+    pill.style.setProperty("--brand-color", item.color);
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "brand-svg");
+    svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#brand-${item.icon}`);
+    svg.append(use);
+
+    const label = document.createElement("span");
+    label.className = "stack-pill-name";
+    label.textContent = item.name;
+
+    const cat = document.createElement("span");
+    cat.className = "stack-pill-cat";
+    cat.textContent = item.category;
+
+    pill.append(svg, label, cat);
+    devStackDock.append(pill);
+  });
+}
+
 // Persistent Capabilities Matrix with Scoped View Transitions (keeps DOM identity for match-element)
 const skillsGrid = document.getElementById("skills-grid");
 const filterChips = Array.from(document.querySelectorAll("[data-skill-filter]"));
@@ -303,13 +332,27 @@ const skillNodes = PROFILE.skillsCatalog.map((skill) => {
   const li = document.createElement("li");
   li.className = "skill-item";
   li.dataset.domain = skill.domain;
+
+  const head = document.createElement("span");
+  head.className = "skill-head";
+  if (skill.icon) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "brand-svg skill-brand-svg");
+    svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#brand-${skill.icon}`);
+    svg.append(use);
+    head.append(svg);
+  }
   const name = document.createElement("span");
   name.className = "skill-name";
   name.textContent = skill.name;
+  head.append(name);
+
   const lvl = document.createElement("span");
   lvl.className = "skill-level";
   lvl.textContent = skill.level;
-  li.append(name, lvl);
+  li.append(head, lvl);
   skillsGrid.append(li);
   return li;
 });
