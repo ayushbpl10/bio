@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+server/discount-redemptions.json
 
 # Dependencies & build artifacts (if ever added)
 node_modules/

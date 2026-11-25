@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import { EventEmitter } from "node:events";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { PassThrough } from "node:stream";
 import test from "node:test";
+import { createDiscountStore, DEFAULT_DISCOUNT_CODE, normalizeIdentity } from "./discounts.js";
 import {
   createGoogleMeetEvent,
   isValidEmail,
@@ -729,4 +733,174 @@ test("get-google-token helpers build OAuth URLs, extract codes, and handle callb
   fakeIn.write("4/pasted-code\n");
   await new Promise((r) => setTimeout(r, 80));
   assert.ok(stdinLogs.some((l) => String(l).includes("bad_code")));
+});
+
+test("50% discount code reduces fee to ₹250 and blocks reuse by same email, profile, or name", async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bio-discount-"));
+  const storePath = path.join(tmpDir, "redemptions.json");
+
+  const norm = normalizeIdentity({ email: " User@Example.COM ", profile: "https://github.com/TestUser/", name: "Test  User" });
+  assert.equal(norm.emailKey, "user@example.com");
+  assert.equal(norm.profileKey, "https://github.com/testuser");
+  assert.equal(norm.nameKey, "test user");
+
+  const store = createDiscountStore({ filePath: storePath });
+  assert.equal(store.getCode(), DEFAULT_DISCOUNT_CODE);
+  assert.equal(store.validate({ code: "" }).amountInr, 500);
+  assert.equal(store.validate({ code: "BADCODE" }).status, 400);
+
+  const okCheck = store.validate({
+    code: "ayush50",
+    email: "alice@example.com",
+    profile: "https://github.com/alice",
+    name: "Alice Doe",
+  });
+  assert.equal(okCheck.ok, true);
+  assert.equal(okCheck.amountInr, 250);
+  assert.equal(okCheck.amountPaise, 25000);
+
+  let createdAmount = 0;
+  const server = createAppServer({
+    keyId: "rzp_test_discount",
+    keySecret: "sec_discount",
+    discountStorePath: storePath,
+    razorpayClient: {
+      orders: {
+        create: async (p) => {
+          createdAmount = p.amount;
+          return { id: "order_disc_1", amount: p.amount, currency: p.currency };
+        },
+      },
+    },
+    env: {},
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = server.address().port;
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    // 1. Validate invalid & valid code via HTTP
+    const badRes = await fetch(`${baseUrl}/api/validate-discount`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: "NOPE", email: "alice@example.com" }),
+    });
+    assert.equal(badRes.status, 400);
+
+    const valRes = await fetch(`${baseUrl}/api/validate-discount`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: "AYUSH50", email: "alice@example.com", name: "Alice Doe" }),
+    });
+    assert.equal(valRes.status, 200);
+    const valJson = await valRes.json();
+    assert.equal(valJson.finalAmountInr, 250);
+
+    // 2. Create Razorpay order with discount -> server enforces 25000 paise
+    const ordRes = await fetch(`${baseUrl}/api/create-order`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: 50000,
+        currency: "INR",
+        discountCode: "AYUSH50",
+        email: "alice@example.com",
+        name: "Alice Doe",
+      }),
+    });
+    assert.equal(ordRes.status, 200);
+    assert.equal(createdAmount, 25000);
+
+    // 3. Verify payment records redemption
+    const sig = crypto.createHmac("sha256", "sec_discount").update("order_disc_1|pay_disc_1").digest("hex");
+    const verRes = await fetch(`${baseUrl}/api/verify-payment`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        razorpay_order_id: "order_disc_1",
+        razorpay_payment_id: "pay_disc_1",
+        razorpay_signature: sig,
+        booking: {
+          id: "AG-DISC-1",
+          name: "Alice Doe",
+          email: "alice@example.com",
+          profile: "https://github.com/alice",
+          dateStr: "2026-12-08",
+          discountCode: "AYUSH50",
+        },
+      }),
+    });
+    assert.equal(verRes.status, 200);
+
+    // 4. Same email blocked on /api/validate-discount, /api/create-order, and /api/book-session (409)
+    const reuseEmail = await fetch(`${baseUrl}/api/create-order`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ discountCode: "AYUSH50", email: "ALICE@EXAMPLE.COM", name: "Someone Else" }),
+    });
+    assert.equal(reuseEmail.status, 409);
+
+    // 5. Different email + same profile URL blocked (409)
+    const reuseProfile = await fetch(`${baseUrl}/api/book-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        booking: {
+          name: "Another Name",
+          email: "other@example.com",
+          profile: "https://github.com/alice/",
+          dateStr: "2026-12-08",
+          discountCode: "AYUSH50",
+        },
+      }),
+    });
+    assert.equal(reuseProfile.status, 409);
+
+    // 6. Different user succeeds on /api/book-session, then same name is blocked (409)
+    const bobBook = await fetch(`${baseUrl}/api/book-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        booking: {
+          name: "Bob Builder",
+          email: "bob@example.com",
+          dateStr: "2026-12-08",
+          discountCode: "AYUSH50",
+        },
+      }),
+    });
+    assert.equal(bobBook.status, 200);
+
+    const bobReuse = await fetch(`${baseUrl}/api/book-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        booking: {
+          name: "Bob Builder",
+          email: "bob2@example.com",
+          dateStr: "2026-12-08",
+          discountCode: "AYUSH50",
+        },
+      }),
+    });
+    assert.equal(bobReuse.status, 409);
+
+    // 7. Invalid code on /api/book-session returns 400
+    const badBook = await fetch(`${baseUrl}/api/book-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        booking: { name: "Carol", email: "carol@example.com", dateStr: "2026-12-08", discountCode: "INVALID" },
+      }),
+    });
+    assert.equal(badBook.status, 400);
+
+    // 8. Reloading store from disk preserves persisted redemptions
+    const reloaded = createDiscountStore({ filePath: storePath });
+    assert.equal(reloaded.validate({ code: "AYUSH50", email: "alice@example.com" }).status, 409);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 });

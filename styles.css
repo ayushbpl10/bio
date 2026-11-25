@@ -2202,6 +2202,39 @@ textarea {
   margin-block-start: 0.5rem;
 }
 
+.discount-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.discount-row input {
+  flex: 1 1 180px;
+  text-transform: uppercase;
+}
+
+.discount-feedback {
+  margin-block-start: 0.35rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.84rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+
+.discount-feedback[data-state="valid"] {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.discount-feedback[data-state="error"] {
+  border-color: var(--error);
+  background: var(--error-bg);
+  color: var(--error);
+}
+
 /* Sticky Apple Wallet-style Checkout Pass */
 .checkout-card {
   position: sticky;

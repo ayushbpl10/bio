@@ -38,6 +38,8 @@ export function sanitizeBookingInput(raw = {}) {
     topicTitle: sanitizeSingleLine(raw.topicTitle, 120),
     profile: sanitizeHttpUrl(raw.profile),
     utr: sanitizeSingleLine(raw.utr, 64),
+    discountCode: sanitizeSingleLine(raw.discountCode, 32).toUpperCase(),
+    feeInr: Number(raw.feeInr) === 250 ? 250 : 500,
     agenda: String(raw.agenda ?? "").replace(/\u0000/g, "").trim().slice(0, 1000),
   };
 }
@@ -111,7 +113,7 @@ export async function createGoogleMeetEvent({ booking, env = process.env, fetchI
       `Booking ID: ${booking.id}`,
       `Guest: ${booking.name} (${booking.email})`,
       booking.profile ? `Profile: ${booking.profile}` : "",
-      `Fee: ₹500 INR`,
+      `Fee: ₹${booking.feeInr || 500} INR${booking.discountCode ? ` (${booking.discountCode} · 50% OFF)` : ""}`,
       `Payment Ref: ${booking.utr || "Verified / Pending"}`,
       `Agenda: ${booking.agenda || "1:1 Engineering & Career Discussion"}`,
     ]
@@ -199,6 +201,7 @@ export async function sendBookingNotificationEmail({
     "",
     `Slot: ${booking.dateLabel || booking.dateStr} · 6:00 PM – 7:00 PM IST (Tuesday)`,
     `Focus Area: ${booking.topicTitle || "1:1 Architecture & Mentorship"}`,
+    `Fee: ₹${booking.feeInr || 500} INR${booking.discountCode ? ` (${booking.discountCode} · 50% OFF)` : ""}`,
     `Guest: ${booking.name} <${booking.email}>`,
     booking.profile ? `LinkedIn/GitHub: ${booking.profile}` : "",
     `Payment Reference: ${booking.utr || "Pending / UPI QR"}`,

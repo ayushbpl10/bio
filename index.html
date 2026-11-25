@@ -21,7 +21,7 @@
   <title>Ayush Gupta — Series 10 · Book a 1:1 Architecture &amp; Mentorship Session</title>
   <meta name="description" content="Meet Ayush Gupta — Senior Software Engineer at Dell Technologies (10+ yrs). Configure and book a focused 1-hour 1:1 architecture or mentorship session for ₹500 INR.">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%232997ff'/%3E%3Cstop offset='100%25' stop-color='%23a855f7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='%230b0c10'/%3E%3Crect x='2' y='2' width='60' height='60' rx='16' fill='none' stroke='url(%23g)' stroke-width='3'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-family='system-ui,sans-serif' font-size='26' font-weight='800' fill='%23ffffff'%3EAG%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=20261126">
+  <link rel="stylesheet" href="styles.css?v=20261126b">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -555,8 +555,19 @@
                 <fieldset class="form-fieldset">
                   <legend><span class="step-badge" aria-hidden="true">4</span> Pay ₹500 INR &amp; Generate Pass</legend>
                   <p class="field-hint">
-                    Pay <strong>₹500 INR</strong> using the live <strong>UPI QR / app link</strong> or <strong>Razorpay link</strong> on your Session Pass card, then paste your payment reference / UTR below to generate your confirmed calendar pass.
+                    Pay <strong id="step4-fee-label">₹500 INR</strong> using the live <strong>UPI QR / app link</strong> or <strong>Razorpay link</strong> on your Session Pass card, then paste your payment reference / UTR below to generate your confirmed calendar pass.
                   </p>
+
+                  <div class="field">
+                    <label for="discount-code">Discount Code (optional)</label>
+                    <span id="discount-hint" class="hint">Have a 50% off referral code? Apply once per person.</span>
+                    <div class="discount-row">
+                      <input type="text" id="discount-code" name="discountCode" maxlength="24" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="done" aria-describedby="discount-hint" placeholder="e.g. AYUSH50">
+                      <button type="button" id="apply-discount-btn" class="pill-btn pill-ghost">Apply</button>
+                      <button type="button" id="remove-discount-btn" class="pill-btn pill-ghost" hidden>Remove</button>
+                    </div>
+                    <div id="discount-feedback" class="discount-feedback" role="status" hidden></div>
+                  </div>
 
                   <div class="field">
                     <label for="upi-utr">Payment Reference / UTR ID (optional before paying)</label>
@@ -606,7 +617,7 @@
                   </div>
                   <div class="summary-total">
                     <dt>Session Fee</dt>
-                    <dd>₹500 INR</dd>
+                    <dd id="summary-fee">₹500 INR</dd>
                   </div>
                 </dl>
 
@@ -748,6 +759,6 @@
   <div id="polite-announcer" aria-live="polite" class="visually-hidden"></div>
 
   <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
-  <script type="module" src="app.js?v=20261126"></script>
+  <script type="module" src="app.js?v=20261126b"></script>
 </body>
 </html>

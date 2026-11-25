@@ -1,6 +1,6 @@
-import { SITE_CONFIG } from "./config.js?v=20261126";
-import { PROFILE } from "./data.js?v=20261126";
-import { renderQrSvg } from "./qr.js?v=20261126";
+import { SITE_CONFIG } from "./config.js?v=20261126b";
+import { PROFILE } from "./data.js?v=20261126b";
+import { renderQrSvg } from "./qr.js?v=20261126b";
 
 /* ==========================================================================
    1. Conditional Polyfill Loading (Popover)
@@ -632,6 +632,13 @@ const slotErrorEl = document.getElementById("slot-error");
 const localTzEl = document.getElementById("local-tz-display");
 const summaryTopicEl = document.getElementById("summary-topic");
 const summaryDatetimeEl = document.getElementById("summary-datetime");
+const summaryFeeEl = document.getElementById("summary-fee");
+const step4FeeLabelEl = document.getElementById("step4-fee-label");
+const discountCodeInput = document.getElementById("discount-code");
+const applyDiscountBtn = document.getElementById("apply-discount-btn");
+const removeDiscountBtn = document.getElementById("remove-discount-btn");
+const discountFeedbackEl = document.getElementById("discount-feedback");
+const confirmBookingBtn = document.getElementById("confirm-booking-btn");
 const upiQrContainer = document.getElementById("upi-qr-container");
 const upiIdValueEl = document.getElementById("upi-id-value");
 const upiCaptionEl = document.getElementById("upi-caption");
@@ -875,12 +882,74 @@ function getSelectedSlot() {
   return list.find((s) => s.id === checked?.value) || null;
 }
 
+let appliedDiscount = null;
+
+function getActiveFeeInr() {
+  return appliedDiscount ? appliedDiscount.feeInr : SITE_CONFIG.sessionFeeInr;
+}
+
+function getDiscountIdentity() {
+  return {
+    email: (document.getElementById("guest-email")?.value || "").trim().toLowerCase(),
+    profile: (document.getElementById("guest-profile")?.value || "").trim().toLowerCase().replace(/\/+$/, ""),
+    name: (document.getElementById("guest-name")?.value || "").trim().toLowerCase().replace(/\s+/g, " "),
+  };
+}
+
+function getUsedDiscounts() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("ag_used_discounts") || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function isDiscountUsedLocally(code) {
+  const id = getDiscountIdentity();
+  return getUsedDiscounts().some(
+    (r) =>
+      r &&
+      r.code === code &&
+      ((id.email && r.email === id.email) ||
+        (id.profile && r.profile === id.profile) ||
+        (id.name && r.name === id.name))
+  );
+}
+
+function recordUsedDiscount(booking) {
+  if (!booking?.discountCode) return;
+  const list = getUsedDiscounts();
+  list.push({
+    code: String(booking.discountCode).toUpperCase(),
+    email: String(booking.email || "").trim().toLowerCase(),
+    profile: String(booking.profile || "").trim().toLowerCase().replace(/\/+$/, ""),
+    name: String(booking.name || "").trim().toLowerCase().replace(/\s+/g, " "),
+  });
+  try {
+    localStorage.setItem("ag_used_discounts", JSON.stringify(list.slice(-50)));
+  } catch { }
+}
+
+function setDiscountFeedback(message, state = "") {
+  if (!discountFeedbackEl) return;
+  if (!message) {
+    discountFeedbackEl.hidden = true;
+    discountFeedbackEl.textContent = "";
+    discountFeedbackEl.removeAttribute("data-state");
+    return;
+  }
+  discountFeedbackEl.textContent = message;
+  if (state) discountFeedbackEl.dataset.state = state;
+  discountFeedbackEl.hidden = false;
+}
+
 function buildUpiUri(note) {
   const pa = isLiveUpiConfigured ? SITE_CONFIG.upiId.trim() : "configure-upi-in-config@upi";
   const params = new URLSearchParams({
     pa,
     pn: SITE_CONFIG.upiPayeeName || SITE_CONFIG.ownerName,
-    am: `${SITE_CONFIG.sessionFeeInr}.00`,
+    am: `${getActiveFeeInr()}.00`,
     cu: SITE_CONFIG.sessionCurrency,
     tn: note.slice(0, 50),
   });
@@ -891,6 +960,7 @@ function updateCheckoutSummary() {
   const topic = getSelectedTopic();
   const dateStr = dateInput.value;
   const slot = getSelectedSlot();
+  const feeInr = getActiveFeeInr();
 
   summaryTopicEl.textContent = topic.title;
   if (dateStr && slot) {
@@ -900,14 +970,119 @@ function updateCheckoutSummary() {
     summaryDatetimeEl.textContent = "Select a Tuesday (6:00 PM IST)";
   }
 
+  if (summaryFeeEl) {
+    summaryFeeEl.textContent = appliedDiscount
+      ? `₹${feeInr} INR (50% OFF · ${appliedDiscount.code})`
+      : `₹${feeInr} INR`;
+  }
+  if (step4FeeLabelEl) step4FeeLabelEl.textContent = `₹${feeInr} INR`;
+  if (razorpayCheckoutBtn && razorpayCheckoutBtn.getAttribute("aria-busy") !== "true") {
+    razorpayCheckoutBtn.textContent = `Pay ₹${feeInr} via Razorpay Checkout`;
+  }
+  if (upiDeepLinkEl) upiDeepLinkEl.textContent = `Open UPI App · Pay ₹${feeInr}`;
+  if (confirmBookingBtn) {
+    const labelSpan = confirmBookingBtn.querySelector("span");
+    if (labelSpan) labelSpan.textContent = `Lock In 1-Hour Session · ₹${feeInr} INR`;
+  }
+
   const upiNote = `1hr Session: ${topic.id} ${dateStr || ""}`.trim();
   const upiUri = buildUpiUri(upiNote);
   upiDeepLinkEl.href = upiUri;
+  if (upiCaptionEl && isLiveUpiConfigured) {
+    upiCaptionEl.textContent = `Instant ₹${feeInr} UPI QR · Zero Fee`;
+  }
   upiQrContainer.innerHTML = renderQrSvg(
     upiUri,
-    `UPI QR code to pay ₹${SITE_CONFIG.sessionFeeInr} INR to ${SITE_CONFIG.ownerName}`
+    `UPI QR code to pay ₹${feeInr} INR to ${SITE_CONFIG.ownerName}`
   );
 }
+
+async function applyDiscountCode() {
+  const raw = (discountCodeInput?.value || "").trim().toUpperCase();
+  if (!raw) {
+    appliedDiscount = null;
+    if (removeDiscountBtn) removeDiscountBtn.hidden = true;
+    setDiscountFeedback("Enter a discount code first.", "error");
+    updateCheckoutSummary();
+    return;
+  }
+
+  const configured = (SITE_CONFIG.discountCode || "").trim().toUpperCase();
+  if (configured && raw !== configured) {
+    appliedDiscount = null;
+    if (removeDiscountBtn) removeDiscountBtn.hidden = true;
+    setDiscountFeedback("Invalid discount code.", "error");
+    updateCheckoutSummary();
+    return;
+  }
+
+  if (isDiscountUsedLocally(raw)) {
+    appliedDiscount = null;
+    if (removeDiscountBtn) removeDiscountBtn.hidden = true;
+    setDiscountFeedback(`Discount code ${raw} has already been used with your email or details.`, "error");
+    updateCheckoutSummary();
+    return;
+  }
+
+  const id = getDiscountIdentity();
+  if (razorpayApiBase) {
+    try {
+      const res = await fetchWithTimeout(
+        `${razorpayApiBase}/api/validate-discount`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: raw, email: id.email, profile: id.profile, name: id.name }),
+        },
+        3000
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.valid) {
+        appliedDiscount = null;
+        if (removeDiscountBtn) removeDiscountBtn.hidden = true;
+        setDiscountFeedback(data.error || "Discount code could not be applied.", "error");
+        updateCheckoutSummary();
+        return;
+      }
+      appliedDiscount = {
+        code: data.code || raw,
+        discountPct: data.discountPct || 50,
+        feeInr: data.finalAmountInr || Math.round(SITE_CONFIG.sessionFeeInr / 2),
+      };
+    } catch {
+      appliedDiscount = {
+        code: raw,
+        discountPct: SITE_CONFIG.discountPercent || 50,
+        feeInr: Math.round((SITE_CONFIG.sessionFeeInr * (100 - (SITE_CONFIG.discountPercent || 50))) / 100),
+      };
+    }
+  } else {
+    appliedDiscount = {
+      code: raw,
+      discountPct: SITE_CONFIG.discountPercent || 50,
+      feeInr: Math.round((SITE_CONFIG.sessionFeeInr * (100 - (SITE_CONFIG.discountPercent || 50))) / 100),
+    };
+  }
+
+  if (discountCodeInput) discountCodeInput.value = appliedDiscount.code;
+  if (removeDiscountBtn) removeDiscountBtn.hidden = false;
+  setDiscountFeedback(
+    `Code ${appliedDiscount.code} applied — 50% off (₹${appliedDiscount.feeInr} INR).`,
+    "valid"
+  );
+  updateCheckoutSummary();
+}
+
+function clearDiscountCode() {
+  appliedDiscount = null;
+  if (discountCodeInput) discountCodeInput.value = "";
+  if (removeDiscountBtn) removeDiscountBtn.hidden = true;
+  setDiscountFeedback("");
+  updateCheckoutSummary();
+}
+
+applyDiscountBtn?.addEventListener("click", applyDiscountCode);
+removeDiscountBtn?.addEventListener("click", clearDiscountCode);
 
 dateInput.addEventListener("input", validateDateInputRule);
 dateInput.addEventListener("change", () => {
@@ -1110,11 +1285,12 @@ function buildIcsContent(booking) {
   const safeId = stripCrlf(booking.id);
   const safeUtr = stripCrlf(booking.utr);
   const safeMeet = stripCrlf(booking.meetUrl);
+  const bookingFee = booking.feeInr || getActiveFeeInr();
   const desc = [
     `1:1 Session with ${stripCrlf(SITE_CONFIG.ownerName)}`,
     `Booking ID: ${safeId}`,
     `Topic: ${topicTitle}`,
-    `Fee: ₹${SITE_CONFIG.sessionFeeInr} INR`,
+    `Fee: ₹${bookingFee} INR${booking.discountCode ? ` (${stripCrlf(booking.discountCode)} · 50% OFF)` : ""}`,
     safeUtr ? `Payment Ref / UTR: ${safeUtr}` : "Payment Ref / UTR: Pending verification",
     safeMeet ? `Google Meet: ${safeMeet}` : "",
     `Agenda: ${stripCrlf(booking.agenda)}`,
@@ -1173,7 +1349,7 @@ function buildGcalUrl(booking) {
     details: [
       `Booking ID: ${booking.id}`,
       `Guest: ${booking.name} (${booking.email})`,
-      `Fee: ₹${SITE_CONFIG.sessionFeeInr} INR`,
+      `Fee: ₹${booking.feeInr || getActiveFeeInr()} INR${booking.discountCode ? ` (${booking.discountCode} · 50% OFF)` : ""}`,
       `Payment Ref / UTR: ${booking.utr || "Pending"}`,
       booking.meetUrl ? `Google Meet: ${booking.meetUrl}` : "Turn on 'Add Google Meet video conferencing' when saving.",
       `Agenda: ${booking.agenda}`,
@@ -1210,13 +1386,14 @@ function openBookingDialog(booking) {
   dialogSubtitle.textContent = `Booking ${booking.id} · ${booking.dateLabel} · ${booking.slotLabel}`;
   dialogPassSummary.innerHTML = "";
 
+  const bookingFee = booking.feeInr || getActiveFeeInr();
   const effectiveMeetUrl = booking.meetUrl || SITE_CONFIG.meetingLink || "";
   const rows = [
     ["Booking ID", booking.id],
     ["Attendee", `${booking.name} (${booking.email})`],
     ["Topic", booking.topicTitle],
     ["When (IST)", `${booking.dateLabel} · ${booking.slotLabel} (Tuesday)`],
-    ["Duration & Fee", `60 Minutes · ₹${SITE_CONFIG.sessionFeeInr} INR`],
+    ["Duration & Fee", `60 Minutes · ₹${bookingFee} INR${booking.discountCode ? ` (${booking.discountCode} · 50% OFF)` : ""}`],
     ["Payment Ref (UTR)", booking.utr || "Pending / Pay via UPI QR or Razorpay"],
     ["Google Meet", effectiveMeetUrl || "Click 'Schedule Google Meet Invite ↗' below to generate & invite Ayush"],
     [
@@ -1250,7 +1427,7 @@ function openBookingDialog(booking) {
   if (SITE_CONFIG.contactEmail) {
     const mailParams = new URLSearchParams({
       subject: `[1:1 Tuesday Session ${booking.id}] ${booking.dateLabel} 6 PM IST — ${booking.topicTitle}`,
-      body: `Hi Ayush,\n\nI booked a Tuesday 6:00 PM IST 1-hour session (₹500 INR).\nBooking ID: ${booking.id}\nDate & Time: ${booking.dateLabel} (${booking.slotLabel})\nPayment Ref / UTR: ${booking.utr || "Attaching receipt"}\n${effectiveMeetUrl ? `Google Meet: ${effectiveMeetUrl}\n` : ""}Agenda: ${booking.agenda}\n\nThanks,\n${booking.name} (${booking.email})`,
+      body: `Hi Ayush,\n\nI booked a Tuesday 6:00 PM IST 1-hour session (₹${bookingFee} INR${booking.discountCode ? ` · ${booking.discountCode}` : ""}).\nBooking ID: ${booking.id}\nDate & Time: ${booking.dateLabel} (${booking.slotLabel})\nPayment Ref / UTR: ${booking.utr || "Attaching receipt"}\n${effectiveMeetUrl ? `Google Meet: ${effectiveMeetUrl}\n` : ""}Agenda: ${booking.agenda}\n\nThanks,\n${booking.name} (${booking.email})`,
     });
     sendConfirmBtn.href = `mailto:${SITE_CONFIG.contactEmail}?${mailParams.toString()}`;
     sendConfirmBtn.textContent = `Email Confirmation to ${SITE_CONFIG.contactEmail} ↗`;
@@ -1322,6 +1499,8 @@ function buildBookingFromForm(slot, paymentOverride = "") {
     profile: document.getElementById("guest-profile").value.trim(),
     agenda: document.getElementById("guest-agenda").value.trim(),
     utr: paymentOverride || document.getElementById("upi-utr").value.trim(),
+    discountCode: appliedDiscount ? appliedDiscount.code : "",
+    feeInr: getActiveFeeInr(),
     topicId: topic.id,
     topicTitle: topic.title,
     dateStr,
@@ -1344,7 +1523,7 @@ function showRazorpayError(message) {
   razorpayErrorEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-function setCheckoutBusy(busy, label = "Pay ₹500 via Razorpay Checkout") {
+function setCheckoutBusy(busy, label = `Pay ₹${getActiveFeeInr()} via Razorpay Checkout`) {
   if (!razorpayCheckoutBtn) return;
   razorpayCheckoutBtn.setAttribute("aria-busy", String(busy));
   razorpayCheckoutBtn.textContent = label;
@@ -1369,10 +1548,18 @@ async function startRazorpayCheckout() {
   const slot = validateBookingInputs();
   if (!slot) return;
 
+  if (appliedDiscount && isDiscountUsedLocally(appliedDiscount.code)) {
+    const usedCode = appliedDiscount.code;
+    clearDiscountCode();
+    showRazorpayError(`Discount code ${usedCode} has already been used with your email or details.`);
+    return;
+  }
+
   const topic = getSelectedTopic();
   const dateStr = dateInput.value;
   const guestName = document.getElementById("guest-name").value.trim();
   const guestEmail = document.getElementById("guest-email").value.trim();
+  const guestProfile = document.getElementById("guest-profile").value.trim();
 
   setCheckoutBusy(true, "Creating Razorpay order…");
   try {
@@ -1383,11 +1570,15 @@ async function startRazorpayCheckout() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: SITE_CONFIG.sessionFeeInr * 100,
+          amount: getActiveFeeInr() * 100,
           currency: SITE_CONFIG.sessionCurrency,
           receipt: `ag_${dateStr}_${slot.id}`.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40),
           topic: topic.id,
           slot: `${dateStr} ${slot.label}`,
+          discountCode: appliedDiscount ? appliedDiscount.code : "",
+          email: guestEmail,
+          profile: guestProfile,
+          name: guestName,
         }),
       },
       10000
@@ -1452,6 +1643,8 @@ async function startRazorpayCheckout() {
             meetUrl: verifyData.meet_url || SITE_CONFIG.meetingLink || "",
             emailSent: Boolean(verifyData.email_sent),
           };
+          recordUsedDiscount(confirmedBooking);
+          clearDiscountCode();
           saveBooking(confirmedBooking);
           openBookingDialog(confirmedBooking);
           showRazorpayError("");
@@ -1490,6 +1683,13 @@ bookingForm.addEventListener("submit", async (e) => {
   const slot = validateBookingInputs();
   if (!slot) return;
 
+  if (appliedDiscount && isDiscountUsedLocally(appliedDiscount.code)) {
+    const usedCode = appliedDiscount.code;
+    clearDiscountCode();
+    showRazorpayError(`Discount code ${usedCode} has already been used with your email or details.`);
+    return;
+  }
+
   const booking = buildBookingFromForm(slot);
   if (razorpayApiBase) {
     confirmBtn?.setAttribute("aria-busy", "true");
@@ -1504,6 +1704,11 @@ bookingForm.addEventListener("submit", async (e) => {
         3000
       );
       const data = await res.json().catch(() => ({}));
+      if (res.status === 409 || res.status === 400) {
+        if (booking.discountCode) clearDiscountCode();
+        showRazorpayError(data.error || "Booking validation failed.");
+        return;
+      }
       if (res.ok) {
         booking.meetUrl = data.meet_url || SITE_CONFIG.meetingLink || "";
         booking.emailSent = Boolean(data.email_sent);
@@ -1514,6 +1719,8 @@ bookingForm.addEventListener("submit", async (e) => {
       confirmBtn?.removeAttribute("aria-busy");
     }
   }
+  recordUsedDiscount(booking);
+  clearDiscountCode();
   saveBooking(booking);
   openBookingDialog(booking);
 });

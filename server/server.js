@@ -1,8 +1,9 @@
 import "dotenv/config";
 import http from "node:http";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import Razorpay from "razorpay";
+import { createDiscountStore, DEFAULT_DISCOUNT_CODE } from "./discounts.js";
 import {
   isValidEmail,
   isValidTuesdayDate,
@@ -125,6 +126,16 @@ export function readJsonBody(req, limitBytes = 32768) {
 
 export function createAppServer(overrides = {}) {
   const cfg = { ...getConfigFromEnv(), ...overrides };
+  const serverDir = path.dirname(fileURLToPath(import.meta.url));
+  const discountStore =
+    cfg.discountStore ||
+    createDiscountStore({
+      code: cfg.env?.DISCOUNT_CODE || DEFAULT_DISCOUNT_CODE,
+      filePath:
+        cfg.discountStorePath !== undefined
+          ? cfg.discountStorePath
+          : path.join(serverDir, "discount-redemptions.json"),
+    });
   const checkRate = createRateLimiter({
     windowMs: cfg.rateLimitWindowMs ?? 60_000,
     maxRequests: cfg.rateLimitMax ?? 30,
@@ -177,9 +188,45 @@ export function createAppServer(overrides = {}) {
       return;
     }
 
+    if (url.pathname === "/api/validate-discount") {
+      const check = discountStore.validate({
+        code: body?.code,
+        email: body?.email,
+        profile: body?.profile,
+        name: body?.name,
+      });
+      if (!check.ok) {
+        sendJson(res, check.status, { valid: false, error: check.error });
+        return;
+      }
+      sendJson(res, 200, {
+        valid: true,
+        applied: check.applied,
+        code: check.code,
+        discountPct: check.discountPct,
+        finalAmountInr: check.amountInr,
+        finalAmountPaise: check.amountPaise,
+      });
+      return;
+    }
+
     if (url.pathname === "/api/create-order") {
+      let orderBody = body;
+      if (body?.discountCode) {
+        const discountCheck = discountStore.validate({
+          code: body.discountCode,
+          email: body.email,
+          profile: body.profile,
+          name: body.name,
+        });
+        if (!discountCheck.ok) {
+          sendJson(res, discountCheck.status, { error: discountCheck.error });
+          return;
+        }
+        orderBody = { ...body, amount: discountCheck.amountPaise };
+      }
       const result = await handleCreateOrder({
-        body,
+        body: orderBody,
         razorpayClient: cfg.razorpayClient,
         keyId: cfg.keyId,
       });
@@ -194,6 +241,17 @@ export function createAppServer(overrides = {}) {
           ...body.booking,
           utr: body.razorpay_payment_id || body.booking.utr || "",
         });
+        if (cleanBooking.discountCode) {
+          const redeemed = discountStore.redeem({
+            code: cleanBooking.discountCode,
+            email: cleanBooking.email,
+            profile: cleanBooking.profile,
+            name: cleanBooking.name,
+          });
+          if (redeemed.ok && redeemed.applied) {
+            cleanBooking.feeInr = redeemed.amountInr;
+          }
+        }
         const bookingActions = await processBookingActions({
           booking: cleanBooking,
           env: cfg.env,
@@ -214,6 +272,19 @@ export function createAppServer(overrides = {}) {
           error: "Valid guest name, email, and Tuesday session date (YYYY-MM-DD) are required.",
         });
         return;
+      }
+      if (booking.discountCode) {
+        const redeemed = discountStore.redeem({
+          code: booking.discountCode,
+          email: booking.email,
+          profile: booking.profile,
+          name: booking.name,
+        });
+        if (!redeemed.ok) {
+          sendJson(res, redeemed.status, { error: redeemed.error });
+          return;
+        }
+        booking.feeInr = redeemed.amountInr;
       }
       const bookingActions = await processBookingActions({
         booking,
