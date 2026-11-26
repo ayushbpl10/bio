@@ -1753,6 +1753,22 @@ bookingForm.addEventListener("submit", async (e) => {
   const slot = validateBookingInputs();
   if (!slot) return;
 
+  const utrEl = document.getElementById("upi-utr");
+  const utrVal = utrEl?.value.trim() || "";
+  if (!/^[A-Za-z0-9_-]{6,32}$/.test(utrVal)) {
+    if (utrEl) {
+      fallbackDirty.set(utrEl, { hasInteracted: true, hasBlurred: true });
+      utrEl.classList.add("user-invalid-fallback");
+      utrEl.classList.remove("user-valid-fallback");
+      utrEl.setAttribute("aria-invalid", "true");
+      utrEl.focus();
+    }
+    showRazorpayError(
+      "Payment required: complete payment via Razorpay Checkout or enter your 6–32 character UPI UTR / Payment ID before locking in your session."
+    );
+    return;
+  }
+
   if (appliedDiscount && isDiscountUsedLocally(appliedDiscount.code)) {
     const usedCode = appliedDiscount.code;
     clearDiscountCode();

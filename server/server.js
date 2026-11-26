@@ -290,6 +290,12 @@ export function createAppServer(overrides = {}) {
         });
         return;
       }
+      if (!/^[A-Za-z0-9_-]{6,32}$/.test(booking.utr)) {
+        sendJson(res, 400, {
+          error: "A valid Payment Reference / UTR ID (6–32 characters) is required to lock in a session.",
+        });
+        return;
+      }
       if (slotStore.isBooked(booking.dateStr)) {
         sendJson(res, 409, {
           error: "This Tuesday 6:00 PM IST slot is already booked. Please select another Tuesday.",

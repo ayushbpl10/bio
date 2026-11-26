@@ -566,6 +566,13 @@ test("HTTP server covers CORS, OPTIONS, 405, 404, bad JSON, 413, create-order, v
     });
     assert.equal(wedReject.status, 400);
 
+    const missingUtrReject = await fetch(`${baseUrl}/api/book-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Test", email: "test@example.com", dateStr: "2026-12-15" }),
+    });
+    assert.equal(missingUtrReject.status, 400);
+
     const tueBook = await fetch(`${baseUrl}/api/book-session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -574,6 +581,7 @@ test("HTTP server covers CORS, OPTIONS, 405, 404, bad JSON, 413, create-order, v
         name: "Test Guest",
         email: "guest@example.com",
         dateStr: "2026-12-15",
+        utr: "412345678901",
         topicTitle: "Observability",
         agenda: "OTel collectors",
       }),
@@ -855,6 +863,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
           email: "other@example.com",
           profile: "https://github.com/alice/",
           dateStr: "2026-12-15",
+          utr: "412345678902",
           discountCode: "TEST-DISC-9X",
         },
       }),
@@ -870,6 +879,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
           name: "Bob Builder",
           email: "bob@example.com",
           dateStr: "2026-12-15",
+          utr: "412345678903",
           discountCode: "TEST-DISC-9X",
         },
       }),
@@ -884,6 +894,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
           name: "Bob Builder",
           email: "bob2@example.com",
           dateStr: "2026-12-22",
+          utr: "412345678904",
           discountCode: "TEST-DISC-9X",
         },
       }),
@@ -895,7 +906,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        booking: { name: "Carol", email: "carol@example.com", dateStr: "2026-12-22", discountCode: "INVALID" },
+        booking: { name: "Carol", email: "carol@example.com", dateStr: "2026-12-22", utr: "412345678905", discountCode: "INVALID" },
       }),
     });
     assert.equal(badBook.status, 400);
@@ -924,7 +935,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
     const dupBook = await fetch(`${baseUrl}/api/book-session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ booking: { name: "Dan", email: "dan@example.com", dateStr: "2026-12-08" } }),
+      body: JSON.stringify({ booking: { name: "Dan", email: "dan@example.com", dateStr: "2026-12-08", utr: "412345678906" } }),
     });
     assert.equal(dupBook.status, 409);
   } finally {
