@@ -1414,7 +1414,10 @@ function getSavedBookings() {
 }
 
 function saveBooking(booking) {
-  const list = [booking, ...getSavedBookings()].slice(0, 5);
+  const existing = getSavedBookings().filter(
+    (b) => b.dateStr !== booking.dateStr && b.id !== booking.id
+  );
+  const list = [booking, ...existing].slice(0, 5);
   try {
     localStorage.setItem("ag_session_bookings", JSON.stringify(list));
   } catch { }
@@ -1517,6 +1520,11 @@ function validateBookingInputs() {
       showRazorpayError("Please select an upcoming Tuesday to activate the 6:00 PM IST slot.");
       dateInput.focus();
     }
+    return null;
+  }
+  if (isDateBooked(dateInput.value)) {
+    selectNextAvailableTuesday();
+    showRazorpayError("This Tuesday 6:00 PM IST slot is already booked. We selected the next open Tuesday.");
     return null;
   }
   return slot;
@@ -1706,6 +1714,10 @@ async function startRazorpayCheckout() {
           if (!verifyRes) throw new Error(`Payment ${paymentResp.razorpay_payment_id} succeeded but verification is pending. Contact Ayush with this ID.`);
           const verifyData = await verifyRes.json().catch(() => ({}));
           if (!verifyRes.ok || !verifyData.verified) {
+            if (verifyRes.status === 409 && /slot/i.test(verifyData.error || "")) {
+              serverBookedDates.add(dateStr);
+              selectNextAvailableTuesday();
+            }
             throw new Error(verifyData.error || "Payment verification failed.");
           }
 
@@ -1769,6 +1781,12 @@ bookingForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  if (getSavedBookings().some((b) => String(b.utr || "").split(" ")[0].toLowerCase() === utrVal.toLowerCase())) {
+    showRazorpayError("This Payment Reference / UTR ID has already been used for a saved session pass.");
+    utrEl?.focus();
+    return;
+  }
+
   if (appliedDiscount && isDiscountUsedLocally(appliedDiscount.code)) {
     const usedCode = appliedDiscount.code;
     clearDiscountCode();
@@ -1790,11 +1808,11 @@ bookingForm.addEventListener("submit", async (e) => {
         3000
       );
       const data = await res.json().catch(() => ({}));
-      if (res.status === 409 || res.status === 400) {
+      if (res.status === 409 || res.status === 400 || res.status === 429) {
         if (res.status === 409 && /slot/i.test(data.error || "")) {
           serverBookedDates.add(booking.dateStr);
           selectNextAvailableTuesday();
-        } else if (booking.discountCode) {
+        } else if (res.status === 400 && booking.discountCode) {
           clearDiscountCode();
         }
         showRazorpayError(data.error || "Booking validation failed.");

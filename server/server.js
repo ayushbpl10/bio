@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import Razorpay from "razorpay";
 import { createDiscountStore, DEFAULT_DISCOUNT_CODE } from "./discounts.js";
-import { createSlotStore } from "./slots.js";
+import { createPaymentRefStore, createSlotStore } from "./slots.js";
 import {
   isValidEmail,
   isValidTuesdayDate,
@@ -145,6 +145,16 @@ export function createAppServer(overrides = {}) {
           ? cfg.slotStorePath
           : path.join(serverDir, "booked-slots.json"),
     });
+  const paymentRefStore =
+    cfg.paymentRefStore ||
+    createPaymentRefStore({
+      filePath:
+        cfg.paymentRefStorePath !== undefined
+          ? cfg.paymentRefStorePath
+          : cfg.slotStorePath === ""
+            ? ""
+            : path.join(serverDir, "used-payments.json"),
+    });
   const checkRate = createRateLimiter({
     windowMs: cfg.rateLimitWindowMs ?? 60_000,
     maxRequests: cfg.rateLimitMax ?? 30,
@@ -257,7 +267,19 @@ export function createAppServer(overrides = {}) {
           ...body.booking,
           utr: body.razorpay_payment_id || body.booking.utr || "",
         });
-        slotStore.book(cleanBooking.dateStr);
+        if (paymentRefStore.has(cleanBooking.utr)) {
+          sendJson(res, 409, {
+            error: "This Razorpay payment has already been used to issue a session pass.",
+          });
+          return;
+        }
+        if (!slotStore.book(cleanBooking.dateStr)) {
+          sendJson(res, 409, {
+            error: "This Tuesday 6:00 PM IST slot is already booked. Please select another Tuesday.",
+          });
+          return;
+        }
+        paymentRefStore.add(cleanBooking.utr);
         if (cleanBooking.discountCode) {
           const redeemed = discountStore.redeem({
             code: cleanBooking.discountCode,
@@ -296,6 +318,12 @@ export function createAppServer(overrides = {}) {
         });
         return;
       }
+      if (paymentRefStore.has(booking.utr)) {
+        sendJson(res, 409, {
+          error: "This Payment Reference / UTR ID has already been used for a session pass.",
+        });
+        return;
+      }
       if (slotStore.isBooked(booking.dateStr)) {
         sendJson(res, 409, {
           error: "This Tuesday 6:00 PM IST slot is already booked. Please select another Tuesday.",
@@ -316,6 +344,7 @@ export function createAppServer(overrides = {}) {
         booking.feeInr = redeemed.amountInr;
       }
       slotStore.book(booking.dateStr);
+      paymentRefStore.add(booking.utr);
       const bookingActions = await processBookingActions({
         booking,
         env: cfg.env,

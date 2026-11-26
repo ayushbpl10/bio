@@ -37,3 +37,21 @@ export function createSlotStore({ filePath = "" } = {}) {
     },
   };
 }
+
+export function createPaymentRefStore({ filePath = "" } = {}) {
+  const refs = new Set(readSlots(filePath).map((r) => r.toLowerCase()));
+
+  return {
+    has: (ref) => {
+      const clean = String(ref || "").trim().toLowerCase();
+      return Boolean(clean) && refs.has(clean);
+    },
+    add: (ref) => {
+      const clean = String(ref || "").trim().toLowerCase();
+      if (!clean || refs.has(clean)) return false;
+      refs.add(clean);
+      writeSlots(filePath, Array.from(refs).sort());
+      return true;
+    },
+  };
+}

@@ -8,7 +8,7 @@ import path from "node:path";
 import { PassThrough } from "node:stream";
 import test from "node:test";
 import { createDiscountStore, DEFAULT_DISCOUNT_CODE, normalizeIdentity } from "./discounts.js";
-import { createSlotStore } from "./slots.js";
+import { createPaymentRefStore, createSlotStore } from "./slots.js";
 import {
   createGoogleMeetEvent,
   isValidEmail,
@@ -776,6 +776,7 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
     keySecret: "sec_discount",
     discountStorePath: storePath,
     slotStorePath: path.join(tmpDir, "server-slots.json"),
+    paymentRefStorePath: path.join(tmpDir, "server-refs.json"),
     razorpayClient: {
       orders: {
         create: async (p) => {
@@ -938,6 +939,52 @@ test("50% discount code reduces fee to ₹250 and blocks reuse by same email, pr
       body: JSON.stringify({ booking: { name: "Dan", email: "dan@example.com", dateStr: "2026-12-08", utr: "412345678906" } }),
     });
     assert.equal(dupBook.status, 409);
+
+    // 11. Payment ref store deduplicates case-insensitively & persists across restarts
+    const refsPath = path.join(tmpDir, "refs.json");
+    const r1 = createPaymentRefStore({ filePath: refsPath });
+    assert.equal(r1.add("PAY_ABC_123"), true);
+    assert.equal(r1.add("pay_abc_123"), false);
+    assert.equal(r1.has("PAY_ABC_123"), true);
+    const r2 = createPaymentRefStore({ filePath: refsPath });
+    assert.equal(r2.has("pay_abc_123"), true);
+
+    // 12. Reusing the same UTR on /api/book-session for a different Tuesday is rejected (409)
+    const utrReuse = await fetch(`${baseUrl}/api/book-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        booking: { name: "Eve", email: "eve@example.com", dateStr: "2026-12-22", utr: "412345678903" },
+      }),
+    });
+    assert.equal(utrReuse.status, 409);
+
+    // 13. /api/verify-payment rejects already-booked slot (409) and replayed razorpay_payment_id (409)
+    const sigBooked = crypto.createHmac("sha256", "sec_discount").update("ord_booked|pay_new_999").digest("hex");
+    const verifyBookedSlot = await fetch(`${baseUrl}/api/verify-payment`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        razorpay_order_id: "ord_booked",
+        razorpay_payment_id: "pay_new_999",
+        razorpay_signature: sigBooked,
+        booking: { name: "Fay", email: "fay@example.com", dateStr: "2026-12-08" },
+      }),
+    });
+    assert.equal(verifyBookedSlot.status, 409);
+
+    const sigReplay = crypto.createHmac("sha256", "sec_discount").update("order_disc_1|pay_disc_1").digest("hex");
+    const verifyReplay = await fetch(`${baseUrl}/api/verify-payment`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        razorpay_order_id: "order_disc_1",
+        razorpay_payment_id: "pay_disc_1",
+        razorpay_signature: sigReplay,
+        booking: { name: "Grace", email: "grace@example.com", dateStr: "2026-12-22" },
+      }),
+    });
+    assert.equal(verifyReplay.status, 409);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     fs.rmSync(tmpDir, { recursive: true, force: true });
