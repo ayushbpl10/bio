@@ -271,7 +271,7 @@ PROFILE.sessionTopics.forEach((topic, idx) => {
   num.textContent = `MODULE 0${idx + 1}`;
   const cta = document.createElement("span");
   cta.className = "module-cta";
-  cta.textContent = "Configure ₹500 →";
+  cta.textContent = "Configure Session →";
   top.append(num, cta);
 
   const title = document.createElement("span");
